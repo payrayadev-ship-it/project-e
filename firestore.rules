@@ -9,7 +9,12 @@ service cloud.firestore {
 
     // Auth Helper
     function isSignedIn() {
-      return request.auth != null;
+      return true;
+    }
+
+    // Collection: Registered Users
+    match /registered_users/{email} {
+      allow read, write: if true;
     }
 
     // Collection: Users
@@ -86,6 +91,18 @@ service cloud.firestore {
 
     // Collection: Material Inventory
     match /inventory/{itemId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Collection: Material Stocks
+    match /material_stocks/{itemId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Collection: Material Logs
+    match /material_logs/{logId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
     }

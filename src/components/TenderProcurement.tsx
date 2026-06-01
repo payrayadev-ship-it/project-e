@@ -11,6 +11,7 @@ interface TenderProcurementProps {
   onUpdateTender: (id: string, updated: Partial<Tender>) => void;
   onUpdateBid: (id: string, updated: Partial<TenderBid>) => void;
   userRole: ERPUserRole;
+  language?: "ID" | "EN";
 }
 
 export const TenderProcurement: React.FC<TenderProcurementProps> = ({
@@ -21,7 +22,8 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
   onAddBid,
   onUpdateTender,
   onUpdateBid,
-  userRole
+  userRole,
+  language = "ID"
 }) => {
   const [showAddTender, setShowAddTender] = useState(false);
   const [selectedTenderId, setSelectedTenderId] = useState<string>(tenders[0]?.id || "");
@@ -45,7 +47,9 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
   const [myBidAmount, setMyBidAmount] = useState(0);
 
   // Grade state
-  const [activeTab, setActiveTab] = useState<"owner" | "contractor">("owner");
+  const [activeTab, setActiveTab] = useState<"owner" | "contractor">(
+    userRole === "Kontraktor" ? "contractor" : "owner"
+  );
 
   const handleCreateTender = (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,22 +143,28 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
           <h2 className="text-xl font-semibold text-white tracking-tight">Modul Procurement & Tender</h2>
           <p className="text-xs text-slate-400">Pengadaan paket pekerjaan terpadu antara Developer & Rekanan Kontraktor</p>
         </div>
-        <div className="flex bg-slate-900 border border-slate-800 p-1 rounded-lg text-xs font-mono">
-          <button 
-            type="button"
-            className={`px-3 py-1.5 rounded-md cursor-pointer transition ${activeTab === "owner" ? "bg-blue-600 text-white" : "text-slate-400"}`}
-            onClick={() => setActiveTab("owner")}
-          >
-            Owner Panel
-          </button>
-          <button 
-            type="button"
-            className={`px-3 py-1.5 rounded-md cursor-pointer transition ${activeTab === "contractor" ? "bg-blue-600 text-white" : "text-slate-400"}`}
-            onClick={() => setActiveTab("contractor")}
-          >
-            Portal Kontraktor
-          </button>
-        </div>
+        {userRole !== "Kontraktor" ? (
+          <div className="flex bg-slate-900 border border-slate-800 p-1 rounded-lg text-xs font-mono">
+            <button 
+              type="button"
+              className={`px-3 py-1.5 rounded-md cursor-pointer transition ${activeTab === "owner" ? "bg-blue-600 text-white" : "text-slate-400"}`}
+              onClick={() => setActiveTab("owner")}
+            >
+              Owner Panel
+            </button>
+            <button 
+              type="button"
+              className={`px-3 py-1.5 rounded-md cursor-pointer transition ${activeTab === "contractor" ? "bg-blue-600 text-white" : "text-slate-400"}`}
+              onClick={() => setActiveTab("contractor")}
+            >
+              Portal Kontraktor
+            </button>
+          </div>
+        ) : (
+          <div className="bg-emerald-950/40 border border-emerald-900/40 text-emerald-400 text-xs px-3 py-1.5 rounded-lg font-mono font-bold uppercase tracking-wider">
+            🔒 {language === "ID" ? "Portal Kontraktor Terproteksi" : "Secured Contractor Portal"}
+          </div>
+        )}
       </div>
 
       {activeTab === "owner" ? (

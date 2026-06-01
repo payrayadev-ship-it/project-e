@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { DailyReport, Project, ERPUserRole } from "../types";
 import { CloudRain, Sun, Cloud, Eye, Plus, MapPin, HardHat, FileText, Anchor } from "lucide-react";
+import { jsPDF } from "jspdf";
 
 interface SiteDailyReportProps {
   reports: DailyReport[];
@@ -60,6 +61,181 @@ export const SiteDailyReport: React.FC<SiteDailyReportProps> = ({
     const lat = (-6.21 + Math.random() * 0.05).toFixed(4);
     const lng = (106.81 + Math.random() * 0.05).toFixed(4);
     setGpsLocation(`${lat}, ${lng} (Auto GPS Geo-Tag)`);
+  };
+
+  const handleDownloadPDF = (report: DailyReport) => {
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
+
+    // Theme Color (Classic Navy #0F4C81 matching App Theme)
+    const primaryColor = [15, 76, 129];
+    const textColor = [33, 37, 41];
+    const mutedText = [108, 117, 125];
+    const borderLight = [224, 224, 224];
+
+    // Header Banner
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.rect(0, 0, 210, 38, "F");
+    
+    // Header Text
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor(255, 255, 255);
+    doc.text("LAPORAN HARIAN KONSTRUKSI", 14, 15);
+    
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text("FORESYNDO CONSOLIDATED ERP — SITE OPERATIONS LOG", 14, 21);
+    
+    doc.setFont("Helvetica", "bold");
+    doc.text(`ID REPORT: ${report.id}`, 140, 15);
+    doc.setFont("Helvetica", "normal");
+    doc.text(`TANGGAL: ${new Date(report.createdAt).toLocaleDateString("id-ID", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`, 140, 21);
+    
+    // Outer Box Frame
+    doc.setDrawColor(210, 215, 225);
+    doc.rect(10, 48, 190, 235, "S");
+
+    // SECTION 1: PROYEK & PENGAWAS
+    doc.setFillColor(245, 247, 250);
+    doc.rect(10, 48, 190, 8, "F");
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text("I. INFORMASI PROYEK & PENGAWAS LAPANGAN", 13, 53);
+
+    // Labels & Values inside section
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+
+    doc.text("Nama Proyek:", 13, 62);
+    doc.setFont("Helvetica", "bold");
+    const splitProject = doc.splitTextToSize(report.projectName || "Situs Konstruksi Proyek", 145);
+    doc.text(splitProject, 45, 62);
+
+    const startY2 = 62 + (splitProject.length > 1 ? (splitProject.length - 1) * 4 : 0) + 6;
+    doc.setDrawColor(borderLight[0], borderLight[1], borderLight[2]);
+    doc.line(13, startY2 - 3, 197, startY2 - 3);
+
+    doc.setFont("Helvetica", "normal");
+    doc.text("Pengawas Lapangan:", 13, startY2);
+    doc.setFont("Helvetica", "bold");
+    doc.text(report.reporterName || "-", 45, startY2);
+
+    const startY3 = startY2 + 6;
+    doc.line(13, startY3 - 3, 197, startY3 - 3);
+
+    doc.setFont("Helvetica", "normal");
+    doc.text("Koordinat GPS:", 13, startY3);
+    doc.setFont("Helvetica", "bold");
+    doc.text(report.gpsLocation || "Geo-tag (N/A)", 45, startY3);
+
+    // SECTION 2: KONDISI KELAYAKAN DAN LAPANGAN
+    const section2Y = startY3 + 10;
+    doc.setDrawColor(210, 215, 225);
+    doc.line(10, section2Y - 4, 200, section2Y - 4);
+    
+    // Section background header
+    doc.setFillColor(245, 247, 250);
+    doc.rect(10, section2Y - 4, 190, 8, "F");
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text("II. KONDISI UMUM LAPANGAN & HAMBATANS (SITE RISK)", 13, section2Y + 1);
+
+    doc.setFont("Helvetica", "normal");
+    doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+    doc.text("Cuaca Hari Ini:", 13, section2Y + 10);
+    doc.setFont("Helvetica", "bold");
+    doc.text(report.weather || "-", 45, section2Y + 10);
+
+    const splitChallenges = doc.splitTextToSize(report.challenges || "Tidak ada kendala kritis harian.", 145);
+    const challengeY = section2Y + 16;
+    doc.setDrawColor(borderLight[0], borderLight[1], borderLight[2]);
+    doc.line(13, challengeY - 3, 197, challengeY - 3);
+
+    doc.setFont("Helvetica", "normal");
+    doc.text("Kendala Harian:", 13, challengeY);
+    doc.setFont("Helvetica", "bold");
+    doc.text(splitChallenges, 45, challengeY);
+
+    // SECTION 3: OPERASIONAL LAPANGAN (TENAGA KERJA, ALAT BERAT, MATERIAL)
+    const section3Y = challengeY + (splitChallenges.length * 4.5) + 6;
+    doc.setDrawColor(210, 215, 225);
+    doc.line(10, section3Y - 4, 200, section3Y - 4);
+
+    doc.setFillColor(245, 247, 250);
+    doc.rect(10, section3Y - 4, 190, 8, "F");
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text("III. LOG REKREASI SUMBER DAYA & AKTIVITAS OPERASIONAL", 13, section3Y + 1);
+
+    // Resources details
+    doc.setFont("Helvetica", "normal");
+    doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+
+    doc.text("Komposisi Pekerja:", 13, section3Y + 10);
+    doc.setFont("Helvetica", "bold");
+    const splitManpower = doc.splitTextToSize(report.manpower || "Tidak ada tenaga kerja.", 145);
+    doc.text(splitManpower, 45, section3Y + 10);
+
+    const equipY = section3Y + 10 + (splitManpower.length * 4.5) + 2;
+    doc.line(13, equipY - 3, 197, equipY - 3);
+
+    doc.setFont("Helvetica", "normal");
+    doc.text("Alat Berat Aktif:", 13, equipY);
+    doc.setFont("Helvetica", "bold");
+    const splitEquip = doc.splitTextToSize(report.equipment || "Tidak ada alat berat aktif.", 145);
+    doc.text(splitEquip, 45, equipY);
+
+    const matY = equipY + (splitEquip.length * 4.5) + 2;
+    doc.line(13, matY - 3, 197, matY - 3);
+
+    doc.setFont("Helvetica", "normal");
+    doc.text("Material Masuk:", 13, matY);
+    doc.setFont("Helvetica", "bold");
+    const splitMat = doc.splitTextToSize(report.materialsEntered || "Tidak ada material masuk.", 145);
+    doc.text(splitMat, 45, matY);
+
+    // SECTION 4: TANDA TANGAN AUTENTIKASI
+    const section4Y = 232;
+    doc.setDrawColor(210, 215, 225);
+    doc.line(10, section4Y - 5, 200, section4Y - 5);
+
+    doc.setFillColor(245, 247, 250);
+    doc.rect(10, section4Y - 5, 190, 8, "F");
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text("IV. OTORISASI & SERTIFIKASI SITE MANAGER", 13, section4Y);
+
+    // Drawing Signatures placeholders (3 columns: Contractor, Project Manager, Consultant)
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(mutedText[0], mutedText[1], mutedText[2]);
+
+    // Col 1: Contractor
+    doc.text("Diajukan Oleh,", 20, 243);
+    doc.text("Main Contractor (Pelaksana)", 20, 247);
+    doc.line(20, 267, 70, 267);
+    doc.text("Tanda Tangan & Cap", 20, 271);
+
+    // Col 2: Consultant/Auditor
+    doc.text("Diverifikasi Oleh,", 80, 243);
+    doc.text("Site Engineer / Auditor", 80, 247);
+    doc.line(80, 267, 130, 267);
+    doc.text("Tanda Tangan & Cap", 80, 271);
+
+    // Col 3: Owner/Developer
+    doc.text("Diapprove & Disetujui,", 140, 243);
+    doc.text("Developer / Direktur Utama", 140, 247);
+    doc.line(140, 267, 190, 267);
+    doc.text("Otoritas Penuh Owner", 140, 271);
+
+    // Save the report
+    doc.save(`Foresyndo-DailyReport-${report.id}.pdf`);
   };
 
   return (
@@ -135,6 +311,12 @@ export const SiteDailyReport: React.FC<SiteDailyReportProps> = ({
 
                     <div className="flex items-center gap-2">
                       <span className="text-[9px] text-slate-500">Masa Log: {new Date(report.createdAt).toLocaleDateString("id-ID")}</span>
+                      <button 
+                        onClick={() => handleDownloadPDF(report)}
+                        className="bg-emerald-950/40 border border-emerald-900 hover:bg-emerald-900/50 text-emerald-400 hover:text-emerald-300 font-medium px-2.5 py-1 rounded text-[10px] flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <FileText size={11} /> Unduh PDF
+                      </button>
                       {report.photoUrl && (
                         <a href={report.photoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded border border-slate-850 text-[10px]">
                           <Eye size={10} /> Lihat Bukti Foto

@@ -1,5 +1,20 @@
 {
   "entities": {
+    "RegisteredUser": {
+      "title": "Registered Contractor User",
+      "description": "User accounts registered through the portal registration flow",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Custom user identifier" },
+        "name": { "type": "string", "description": "Full name of the user" },
+        "email": { "type": "string", "description": "Registered email address" },
+        "password": { "type": "string", "description": "Hashed/plain access password key" },
+        "company": { "type": "string", "description": "Company name" },
+        "role": { "type": "string", "description": "Assigned ERP system role" },
+        "registeredAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "email", "password", "company", "role"]
+    },
     "User": {
       "title": "User Profile",
       "description": "User account registration with role details",
@@ -229,6 +244,10 @@
     }
   },
   "firestore": {
+    "registered_users": {
+      "schema": { "$ref": "RegisteredUser" },
+      "description": "User accounts registered specifically through the front-end login/registration form"
+    },
     "users": {
       "schema": { "$ref": "User" },
       "description": "All system registered user accounts"

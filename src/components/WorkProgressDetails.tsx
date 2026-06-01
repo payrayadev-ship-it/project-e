@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { WorkProgress, Project, ERPUserRole } from "../types";
-import { ThumbsUp, ThumbsDown, Clock, Check, RefreshCcw, Camera, Eye } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Clock, Check, RefreshCcw, Camera, Eye, FileText } from "lucide-react";
+import { jsPDF } from "jspdf";
 
 interface WorkProgressDetailsProps {
   progressList: WorkProgress[];
@@ -27,6 +28,169 @@ export const WorkProgressDetails: React.FC<WorkProgressDetailsProps> = ({
   const [percentage, setPercentage] = useState(0);
   const [description, setDescription] = useState("");
   const [photoUrl, setPhotoUrl] = useState("https://images.unsplash.com/photo-1541888946425-d81bb19240f5?q=80&w=600");
+
+  const handleDownloadProgressPDF = (report: WorkProgress) => {
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
+
+    // Color definitions
+    const primaryColor = [15, 76, 129]; // #0F4C81
+    const textColor = [33, 37, 41];
+    const mutedText = [108, 117, 125];
+    const borderLight = [224, 224, 224];
+
+    // Header Banner
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.rect(0, 0, 210, 38, "F");
+
+    // Header Text
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(15);
+    doc.setTextColor(255, 255, 255);
+    doc.text("LAPORAN CAPAIAN FISIK KONSTRUKSI", 14, 15);
+
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text("FORESYNDO CONSOLIDATED ERP — CONTRACTOR WORK PROGRESS", 14, 21);
+
+    doc.setFont("Helvetica", "bold");
+    doc.text(`KODE LAPORAN: ${report.id}`, 140, 15);
+    doc.setFont("Helvetica", "normal");
+    doc.text(`TANGGAL: ${new Date(report.createdAt).toLocaleDateString("id-ID", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`, 140, 21);
+
+    // Outer Frame Border
+    doc.setDrawColor(210, 215, 225);
+    doc.rect(10, 48, 190, 235, "S");
+
+    // SECTION 1: PROYEK & KONTRAKTOR
+    doc.setFillColor(245, 247, 250);
+    doc.rect(10, 48, 190, 8, "F");
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text("I. INFORMASI PROYEK & REKANAN PELAKSANA", 13, 53);
+
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+
+    doc.text("Nama Proyek:", 13, 62);
+    doc.setFont("Helvetica", "bold");
+    const splitProjectName = doc.splitTextToSize(report.projectName || "Situs Konstruksi Proyek", 145);
+    doc.text(splitProjectName, 45, 62);
+
+    const startY2 = 62 + (splitProjectName.length > 1 ? (splitProjectName.length - 1) * 4 : 0) + 6;
+    doc.setDrawColor(borderLight[0], borderLight[1], borderLight[2]);
+    doc.line(13, startY2 - 3, 197, startY2 - 3);
+
+    doc.setFont("Helvetica", "normal");
+    doc.text("Kontraktor Utama:", 13, startY2);
+    doc.setFont("Helvetica", "bold");
+    doc.text(report.contractorName || "PT. Krakatau Karya Jaya (Rekanan)", 45, startY2);
+
+    const startY3 = startY2 + 6;
+    doc.line(13, startY3 - 3, 197, startY3 - 3);
+
+    doc.setFont("Helvetica", "normal");
+    doc.text("ID Kontraktor:", 13, startY3);
+    doc.setFont("Helvetica", "bold");
+    doc.text(report.contractorId || "CONT-001", 45, startY3);
+
+    // SECTION 2: CAPAIAN KINERJA FISIK PROYEK
+    const section2Y = startY3 + 10;
+    doc.setDrawColor(210, 215, 225);
+    doc.line(10, section2Y - 4, 200, section2Y - 4);
+
+    doc.setFillColor(245, 247, 250);
+    doc.rect(10, section2Y - 4, 190, 8, "F");
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text("II. RINGKASAN CAPAIAN FISIK & STATUS HUKUM VERIFIKASI", 13, section2Y + 1);
+
+    doc.setFont("Helvetica", "normal");
+    doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+
+    doc.text("Periode Pelaporan:", 13, section2Y + 10);
+    doc.setFont("Helvetica", "bold");
+    doc.text(`${report.periodType === "Daily" ? "Harian" : report.periodType === "Weekly" ? "Mingguan" : "Bulanan"}`, 45, section2Y + 10);
+
+    const valueY = section2Y + 16;
+    doc.line(13, valueY - 3, 197, valueY - 3);
+
+    doc.setFont("Helvetica", "normal");
+    doc.text("Capaian Fisik (%):", 13, valueY);
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(40, 167, 69); // Green accent
+    doc.text(`${report.percentage}% (Hingga Periode Ini)`, 45, valueY);
+
+    const statusY = valueY + 6;
+    doc.setDrawColor(borderLight[0], borderLight[1], borderLight[2]);
+    doc.line(13, statusY - 3, 197, statusY - 3);
+
+    doc.setFont("Helvetica", "normal");
+    doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+    doc.text("Status Verifikasi:", 13, statusY);
+    doc.setFont("Helvetica", "bold");
+    doc.text(report.status || "Pending Verification", 45, statusY);
+
+    // SECTION 3: RINGKASAN TEKNIS AKTIVITAS (WORK COMPLETED)
+    const section3Y = statusY + 10;
+    doc.setDrawColor(210, 215, 225);
+    doc.line(10, section3Y - 4, 200, section3Y - 4);
+
+    doc.setFillColor(245, 247, 250);
+    doc.rect(10, section3Y - 4, 190, 8, "F");
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text("III. DESKRIPSI TEKNIS PEKERJAAN SELESAI (WORK REPORT)", 13, section3Y + 1);
+
+    doc.setFont("Helvetica", "normal");
+    doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+    doc.text("Uraian Pekerjaan:", 13, section3Y + 10);
+
+    doc.setFont("Helvetica", "normal");
+    const splitDescription = doc.splitTextToSize(report.description || "Tidak ada rincian pekerjaan terperinci.", 145);
+    doc.text(splitDescription, 45, section3Y + 10);
+
+    // SECTION 4: LEMBAR PENGESAHAN DANA KLAIM (SIGN SIGN-OFF)
+    const section4Y = 232;
+    doc.setDrawColor(210, 215, 225);
+    doc.line(10, section4Y - 5, 200, section4Y - 5);
+
+    doc.setFillColor(245, 247, 250);
+    doc.rect(10, section4Y - 5, 190, 8, "F");
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text("IV. LEMBAR PERSETUJUAN MULTI-STAKEHOLDER", 13, section4Y);
+
+    // Signatures placeholders
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(mutedText[0], mutedText[1], mutedText[2]);
+
+    // Col 1: Contractor
+    doc.text("Diajukan Oleh,", 20, 243);
+    doc.text("Project Manager Kontraktor", 20, 247);
+    doc.line(20, 267, 70, 267);
+    doc.text("Tanda Tangan & Cap", 20, 271);
+
+    // Col 2: Supervising Consultant
+    doc.text("Diperiksa Oleh,", 80, 243);
+    doc.text("KSO Konsultan Pengawas", 80, 247);
+    doc.line(80, 267, 130, 267);
+    doc.text("Tanda Tangan & Cap", 80, 271);
+
+    // Col 3: Owner Approval
+    doc.text("Disetujui Oleh,", 140, 243);
+    doc.text("Developer / Project Director", 140, 247);
+    doc.line(140, 267, 190, 267);
+    doc.text("Tanda Tangan Pemilik Proyek", 140, 271);
+
+    doc.save(`Foresyndo-WorkProgress-${report.id}.pdf`);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,9 +309,17 @@ export const WorkProgressDetails: React.FC<WorkProgressDetailsProps> = ({
 
                 {/* Control bar for Owner / PM */}
                 <div className="bg-slate-950 px-5 py-3 border-t border-slate-850 flex justify-between items-center gap-2">
-                  <span className="text-[10px] text-slate-500 font-mono">
-                    Diajukan: {new Date(report.createdAt).toLocaleDateString("id-ID")}
-                  </span>
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      Diajukan: {new Date(report.createdAt).toLocaleDateString("id-ID")}
+                    </span>
+                    <button
+                      onClick={() => handleDownloadProgressPDF(report)}
+                      className="bg-emerald-950/45 border border-emerald-900 hover:bg-emerald-900/50 text-emerald-400 hover:text-emerald-300 font-medium px-2 py-0.5 rounded text-[10px] flex items-center gap-1 cursor-pointer transition"
+                    >
+                      <FileText size={11} /> Unduh PDF
+                    </button>
+                  </div>
                   
                   {report.status === "Pending" && ["Project Manager", "Project Director", "Super Admin", "Direktur"].includes(userRole) && (
                     <div className="flex gap-2">

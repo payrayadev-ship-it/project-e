@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   INITIAL_PROJECTS, 
   INITIAL_BOQ, 
@@ -25,6 +25,11 @@ import {
   ERPUserRole 
 } from "./types";
 
+// Firebase Imports
+import { collection, doc, setDoc, onSnapshot, getDocs, getDoc } from "firebase/firestore";
+import { signInAnonymously } from "firebase/auth";
+import { db, auth, handleFirestoreError, OperationType } from "./firebase";
+
 // Component imports
 import { DashboardDirektur } from "./components/DashboardDirektur";
 import { MasterProyek } from "./components/MasterProyek";
@@ -37,6 +42,8 @@ import { ChangeOrders } from "./components/ChangeOrders";
 import { BillingPayments } from "./components/BillingPayments";
 import { InventoryMaterialTracker } from "./components/InventoryMaterialTracker";
 import { GeminiAssistant } from "./components/GeminiAssistant";
+import { LoginScreen } from "./components/LoginScreen";
+import { ContractorDashboard } from "./components/ContractorDashboard";
 
 // Lucide Icons for sidebar layout
 import { 
@@ -55,7 +62,8 @@ import {
   Menu, 
   X, 
   Globe, 
-  UserSquare 
+  UserSquare,
+  LogOut
 } from "lucide-react";
 
 export default function App() {
@@ -99,106 +107,423 @@ export default function App() {
   ]);
 
   // UI Utilities
-  const [activeTab, setActiveTab] = useState<string>("dashboard");
-  const [userRole, setUserRole] = useState<ERPUserRole>("Super Admin");
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    return localStorage.getItem("forsdig_is_logged_in") === "true";
+  });
+  const [userRole, setUserRole] = useState<ERPUserRole>(() => {
+    return (localStorage.getItem("forsdig_user_role") as ERPUserRole) || "Super Admin";
+  });
+  const [loggedUserName, setLoggedUserName] = useState<string>(() => {
+    return localStorage.getItem("forsdig_user_name") || "Administrator";
+  });
+  const [loggedUserEmail, setLoggedUserEmail] = useState<string>(() => {
+    return localStorage.getItem("forsdig_user_email") || "admin@foresyndo.com";
+  });
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const role = localStorage.getItem("forsdig_user_role") || "Super Admin";
+    return role === "Kontraktor" ? "contractor_dashboard" : "dashboard";
+  });
   const [language, setLanguage] = useState<"ID" | "EN">("ID");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Mutator Actions
-  const handleAddProject = (newProj: Project) => {
-    setProjects([newProj, ...projects]);
+  // Login handler
+  const handleLogin = (role: ERPUserRole, name: string, email: string) => {
+    setIsLoggedIn(true);
+    setUserRole(role);
+    setLoggedUserName(name);
+    setLoggedUserEmail(email);
+    localStorage.setItem("forsdig_is_logged_in", "true");
+    localStorage.setItem("forsdig_user_role", role);
+    localStorage.setItem("forsdig_user_name", name);
+    localStorage.setItem("forsdig_user_email", email);
+
+    if (role === "Kontraktor") {
+      setActiveTab("contractor_dashboard");
+    } else {
+      setActiveTab("dashboard");
+    }
   };
 
-  const handleUpdateProject = (projectId: string, updated: Partial<Project>) => {
-    setProjects(projects.map(p => p.id === projectId ? { ...p, ...updated } : p));
+  // Logout handler
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    localStorage.removeItem("forsdig_is_logged_in");
+    localStorage.removeItem("forsdig_user_role");
+    localStorage.removeItem("forsdig_user_name");
+    localStorage.removeItem("forsdig_user_email");
+    setLoggedUserName("");
+    setLoggedUserEmail("");
   };
 
-  const handleAddTender = (newTender: Tender) => {
-    setTenders([newTender, ...tenders]);
-  };
+  // Enforce contractor tab restriction recursively
+  useEffect(() => {
+    if (isLoggedIn && userRole === "Kontraktor" && !["contractor_dashboard", "progress", "site_report", "tender"].includes(activeTab)) {
+      setActiveTab("contractor_dashboard");
+    }
+  }, [userRole, activeTab, isLoggedIn]);
 
-  const handleAddBid = (newBid: TenderBid) => {
-    setBids([newBid, ...bids]);
-  };
-
-  const handleUpdateTender = (id: string, updated: Partial<Tender>) => {
-    setTenders(tenders.map(t => t.id === id ? { ...t, ...updated } : t));
-  };
-
-  const handleUpdateBid = (id: string, updated: Partial<TenderBid>) => {
-    setBids(bids.map(b => b.id === id ? { ...b, ...updated } : b));
-  };
-
-  const handleAddBoqItem = (newItem: BOQItem) => {
-    setBoqList([...boqList, newItem]);
-  };
-
-  const handleAddProgress = (newReport: WorkProgress) => {
-    setProgressList([newReport, ...progressList]);
-  };
-
-  const handleApproveProgress = (reportId: string, projectId: string, scorePct: number) => {
-    // 1. Update report status to Approved
-    setProgressList(progressList.map(pr => pr.id === reportId ? { ...pr, status: "Approved" } : pr));
-    // 2. Automatically sync back to Master Project physical completion %
-    setProjects(projects.map(p => p.id === projectId ? { ...p, progressPhysical: scorePct } : p));
-  };
-
-  const handleRejectProgress = (id: string, status: "Rejected" | "Revision") => {
-    setProgressList(progressList.map(pr => pr.id === id ? { ...pr, status } : pr));
-  };
-
-  const handleAddReport = (newLog: DailyReport) => {
-    setReports([newLog, ...reports]);
-  };
-
-  const handleAddFinding = (finding: any) => {
-    setQcList([finding, ...qcList]);
-  };
-
-  const handleUpdateFinding = (id: string, updated: Partial<any>) => {
-    setQcList(qcList.map(q => q.id === id ? { ...q, ...updated } : q));
-  };
-
-  const handleAddVO = (newVO: VariationOrder) => {
-    setVariationOrders([newVO, ...variationOrders]);
-  };
-
-  const handleUpdateVO = (id: string, updated: Partial<VariationOrder>) => {
-    setVariationOrders(variationOrders.map(vo => {
-      if (vo.id === id) {
-        const merged = { ...vo, ...updated };
-        // If VO is finalized by Director and is "Tambah" type, physically boost the Master Project Value contract!
-        if (updated.status === "Direktur Approved") {
-          const delta = vo.type === "Tambah" ? vo.amount : -vo.amount;
-          setProjects(prevProjects => prevProjects.map(p => p.id === vo.projectId ? { ...p, value: p.value + delta } : p));
+  // Seeding helper to pre-fill Firestore if empty
+  const seedCollectionIfEmpty = async (collName: string, initialData: any[]) => {
+    try {
+      const snapshot = await getDocs(collection(db, collName)).catch((err) => {
+        handleFirestoreError(err, OperationType.GET, collName);
+      });
+      if (snapshot && snapshot.empty) {
+        console.log(`Seeding Firestore collection '${collName}' with ${initialData.length} items.`);
+        for (const item of initialData) {
+          const docId = item.id || doc(collection(db, collName)).id;
+          await setDoc(doc(db, collName, docId), item).catch((err) => {
+            handleFirestoreError(err, OperationType.WRITE, `${collName}/${docId}`);
+          });
         }
-        return merged;
       }
-      return vo;
-    }));
+    } catch (err) {
+      console.error(`Error seeding ${collName}:`, err);
+    }
   };
 
-  const handleAddTerm = (newTerm: PaymentTerm) => {
-    setPaymentTerms([newTerm, ...paymentTerms]);
+  // Setup Firebase Real-time listeners and authentication on mount
+  useEffect(() => {
+    // 1. Authenticate anonymously in the background; catch and log warning if restricted by console settings
+    signInAnonymously(auth)
+      .then((cred) => {
+        console.log("Authenticated with Firebase anonymously: ", cred.user.uid);
+      })
+      .catch((err) => {
+        console.warn("Anonymous authentication is restricted or disabled in the Firebase console: ", err.message);
+      });
+
+    // 2. Set up Firestore initialization regardless of current auth credentials
+    console.log("Initializing real-time Firestore synchronization...");
+
+    // Asynchronously seed empty collections so the app starts with nice data
+    seedCollectionIfEmpty("projects", INITIAL_PROJECTS);
+    seedCollectionIfEmpty("boq", INITIAL_BOQ);
+    seedCollectionIfEmpty("tenders", INITIAL_TENDERS);
+    seedCollectionIfEmpty("tender_bids", INITIAL_BIDS);
+    seedCollectionIfEmpty("work_progress", INITIAL_PROGRESS);
+    seedCollectionIfEmpty("daily_reports", INITIAL_DAILY_REPORTS);
+    seedCollectionIfEmpty("quality_control", [
+      {
+        id: "QC-201",
+        projectId: "PROJ-001",
+        projectName: "Apartemen Grand Foresyndo Landmark",
+        scope: "Struktur",
+        issue: "Pemasangan re-bar kolom B3 kurang lurus 3cm dari toleransi beban maksimum.",
+        status: "Open",
+        inspector: "Bambang Tri (Konsultan Audit)",
+        photoUrl: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?q=80&w=600"
+      },
+      {
+        id: "QC-202",
+        projectId: "PROJ-002",
+        projectName: "Pergudangan Bandara Foresyndo LogisHub",
+        scope: "MEP",
+        issue: "Kabel grounding panel utama tersambung longgar, berpotensi sirkuit pendek harian.",
+        status: "Rectified",
+        issueResolved: "Kabel grounding telah di-tighten dengan klem tembaga ulir ganda.",
+        inspector: "Teguh Santoso (Auditor MEP)",
+        photoUrl: "https://images.unsplash.com/photo-1581094288338-2314dddb7eed?q=80&w=600",
+        remedyAction: "Cor grounding dibungkus semen tahan korosi khusus.",
+        rectificationPhotoUrl: "https://images.unsplash.com/photo-1581094288338-2314dddb7eed?q=80&w=600"
+      }
+    ]);
+    seedCollectionIfEmpty("variation_orders", INITIAL_CHANGE_ORDERS);
+    seedCollectionIfEmpty("payment_terms", INITIAL_PAYMENT_TERMS);
+    seedCollectionIfEmpty("material_stocks", INITIAL_MATERIAL_STOCKS);
+    seedCollectionIfEmpty("material_logs", INITIAL_MATERIAL_LOGS);
+
+    // Listeners setup
+    const unsubProjects = onSnapshot(collection(db, "projects"), (snapshot) => {
+      const list: Project[] = [];
+      snapshot.forEach((doc) => {
+        list.push(doc.data() as Project);
+      });
+      setProjects(list);
+    }, (err) => {
+      console.warn("Firestore projects snapshot failed:", err.message);
+    });
+
+    const unsubBoq = onSnapshot(collection(db, "boq"), (snapshot) => {
+      const list: BOQItem[] = [];
+      snapshot.forEach((doc) => {
+        list.push(doc.data() as BOQItem);
+      });
+      setBoqList(list);
+    }, (err) => {
+      console.warn("Firestore boq snapshot failed:", err.message);
+    });
+
+    const unsubTenders = onSnapshot(collection(db, "tenders"), (snapshot) => {
+      const list: Tender[] = [];
+      snapshot.forEach((doc) => {
+        list.push(doc.data() as Tender);
+      });
+      setTenders(list);
+    }, (err) => {
+      console.warn("Firestore tenders snapshot failed:", err.message);
+    });
+
+    const unsubBids = onSnapshot(collection(db, "tender_bids"), (snapshot) => {
+      const list: TenderBid[] = [];
+      snapshot.forEach((doc) => {
+        list.push(doc.data() as TenderBid);
+      });
+      setBids(list);
+    }, (err) => {
+      console.warn("Firestore tender_bids snapshot failed:", err.message);
+    });
+
+    const unsubProgress = onSnapshot(collection(db, "work_progress"), (snapshot) => {
+      const list: WorkProgress[] = [];
+      snapshot.forEach((doc) => {
+        list.push(doc.data() as WorkProgress);
+      });
+      setProgressList(list);
+    }, (err) => {
+      console.warn("Firestore work_progress snapshot failed:", err.message);
+    });
+
+    const unsubReports = onSnapshot(collection(db, "daily_reports"), (snapshot) => {
+      const list: DailyReport[] = [];
+      snapshot.forEach((doc) => {
+        list.push(doc.data() as DailyReport);
+      });
+      setReports(list);
+    }, (err) => {
+      console.warn("Firestore daily_reports snapshot failed:", err.message);
+    });
+
+    const unsubQC = onSnapshot(collection(db, "quality_control"), (snapshot) => {
+      const list: any[] = [];
+      snapshot.forEach((doc) => {
+        list.push(doc.data());
+      });
+      setQcList(list);
+    }, (err) => {
+      console.warn("Firestore quality_control snapshot failed:", err.message);
+    });
+
+    const unsubVO = onSnapshot(collection(db, "variation_orders"), (snapshot) => {
+      const list: VariationOrder[] = [];
+      snapshot.forEach((doc) => {
+        list.push(doc.data() as VariationOrder);
+      });
+      setVariationOrders(list);
+    }, (err) => {
+      console.warn("Firestore variation_orders snapshot failed:", err.message);
+    });
+
+    const unsubPaymentTerms = onSnapshot(collection(db, "payment_terms"), (snapshot) => {
+      const list: PaymentTerm[] = [];
+      snapshot.forEach((doc) => {
+        list.push(doc.data() as PaymentTerm);
+      });
+      setPaymentTerms(list);
+    }, (err) => {
+      console.warn("Firestore payment_terms snapshot failed:", err.message);
+    });
+
+    const unsubMaterials = onSnapshot(collection(db, "material_stocks"), (snapshot) => {
+      const list: MaterialStock[] = [];
+      snapshot.forEach((doc) => {
+        list.push(doc.data() as MaterialStock);
+      });
+      setMaterials(list);
+    }, (err) => {
+      console.warn("Firestore material_stocks snapshot failed:", err.message);
+    });
+
+    const unsubLogs = onSnapshot(collection(db, "material_logs"), (snapshot) => {
+      const list: MaterialLog[] = [];
+      snapshot.forEach((doc) => {
+        list.push(doc.data() as MaterialLog);
+      });
+      setLogs(list);
+    }, (err) => {
+      console.warn("Firestore material_logs snapshot failed:", err.message);
+    });
+
+    return () => {
+      unsubProjects();
+      unsubBoq();
+      unsubTenders();
+      unsubBids();
+      unsubProgress();
+      unsubReports();
+      unsubQC();
+      unsubVO();
+      unsubPaymentTerms();
+      unsubMaterials();
+      unsubLogs();
+    };
+  }, []);
+
+  // Mutator Actions back-seeded to Firestore
+  const handleAddProject = async (newProj: Project) => {
+    try {
+      await setDoc(doc(db, "projects", newProj.id), newProj);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `projects/${newProj.id}`);
+    }
   };
 
-  const handleUpdateTerm = (id: string, updated: Partial<PaymentTerm>) => {
-    setPaymentTerms(paymentTerms.map(t => t.id === id ? { ...t, ...updated } : t));
+  const handleUpdateProject = async (projectId: string, updated: Partial<Project>) => {
+    try {
+      await setDoc(doc(db, "projects", projectId), updated, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `projects/${projectId}`);
+    }
   };
 
-  const handleAddLog = (newLog: MaterialLog) => {
-    setLogs([newLog, ...logs]);
-    // Synchronize material stock balance!
-    setMaterials(materials.map(m => {
-      if (m.id === newLog.materialId) {
+  const handleAddTender = async (newTender: Tender) => {
+    try {
+      await setDoc(doc(db, "tenders", newTender.id), newTender);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `tenders/${newTender.id}`);
+    }
+  };
+
+  const handleAddBid = async (newBid: TenderBid) => {
+    try {
+      await setDoc(doc(db, "tender_bids", newBid.id), newBid);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `tender_bids/${newBid.id}`);
+    }
+  };
+
+  const handleUpdateTender = async (id: string, updated: Partial<Tender>) => {
+    try {
+      await setDoc(doc(db, "tenders", id), updated, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `tenders/${id}`);
+    }
+  };
+
+  const handleUpdateBid = async (id: string, updated: Partial<TenderBid>) => {
+    try {
+      await setDoc(doc(db, "tender_bids", id), updated, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `tender_bids/${id}`);
+    }
+  };
+
+  const handleAddBoqItem = async (newItem: BOQItem) => {
+    try {
+      await setDoc(doc(db, "boq", newItem.id), newItem);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `boq/${newItem.id}`);
+    }
+  };
+
+  const handleAddProgress = async (newReport: WorkProgress) => {
+    try {
+      await setDoc(doc(db, "work_progress", newReport.id), newReport);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `work_progress/${newReport.id}`);
+    }
+  };
+
+  const handleApproveProgress = async (reportId: string, projectId: string, scorePct: number) => {
+    try {
+      await setDoc(doc(db, "work_progress", reportId), { status: "Approved" }, { merge: true });
+      await setDoc(doc(db, "projects", projectId), { progressPhysical: scorePct }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `work_progress/${reportId}`);
+    }
+  };
+
+  const handleRejectProgress = async (id: string, status: "Rejected" | "Revision") => {
+    try {
+      await setDoc(doc(db, "work_progress", id), { status }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `work_progress/${id}`);
+    }
+  };
+
+  const handleAddReport = async (newLog: DailyReport) => {
+    try {
+      await setDoc(doc(db, "daily_reports", newLog.id), newLog);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `daily_reports/${newLog.id}`);
+    }
+  };
+
+  const handleAddFinding = async (finding: any) => {
+    try {
+      await setDoc(doc(db, "quality_control", finding.id), finding);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `quality_control/${finding.id}`);
+    }
+  };
+
+  const handleUpdateFinding = async (id: string, updated: Partial<any>) => {
+    try {
+      await setDoc(doc(db, "quality_control", id), updated, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `quality_control/${id}`);
+    }
+  };
+
+  const handleAddVO = async (newVO: VariationOrder) => {
+    try {
+      await setDoc(doc(db, "variation_orders", newVO.id), newVO);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `variation_orders/${newVO.id}`);
+    }
+  };
+
+  const handleUpdateVO = async (id: string, updated: Partial<VariationOrder>) => {
+    try {
+      await setDoc(doc(db, "variation_orders", id), updated, { merge: true });
+      if (updated.status === "Direktur Approved") {
+        const docSnapVO = await getDoc(doc(db, "variation_orders", id));
+        if (docSnapVO.exists()) {
+          const vo = docSnapVO.data() as VariationOrder;
+          const delta = vo.type === "Tambah" ? vo.amount : -vo.amount;
+          const docSnapProj = await getDoc(doc(db, "projects", vo.projectId));
+          if (docSnapProj.exists()) {
+            const proj = docSnapProj.data() as Project;
+            await setDoc(doc(db, "projects", vo.projectId), { value: proj.value + delta }, { merge: true });
+          }
+        }
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `variation_orders/${id}`);
+    }
+  };
+
+  const handleAddTerm = async (newTerm: PaymentTerm) => {
+    try {
+      await setDoc(doc(db, "payment_terms", newTerm.id), newTerm);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `payment_terms/${newTerm.id}`);
+    }
+  };
+
+  const handleUpdateTerm = async (id: string, updated: Partial<PaymentTerm>) => {
+    try {
+      await setDoc(doc(db, "payment_terms", id), updated, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `payment_terms/${id}`);
+    }
+  };
+
+  const handleAddLog = async (newLog: MaterialLog) => {
+    try {
+      await setDoc(doc(db, "material_logs", newLog.id), newLog);
+      const docSnap = await getDoc(doc(db, "material_stocks", newLog.materialId));
+      if (docSnap.exists()) {
+        const m = docSnap.data() as MaterialStock;
         const finalStock = newLog.type === "IN" 
           ? m.stock + newLog.quantity 
           : m.stock - newLog.quantity;
-        return { ...m, stock: Math.max(0, finalStock) };
+        const updatedStock = Math.max(0, finalStock);
+        await setDoc(doc(db, "material_stocks", m.id), { ...m, stock: updatedStock });
       }
-      return m;
-    }));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `material_logs/${newLog.id}`);
+    }
   };
 
   // Translations
@@ -219,6 +544,16 @@ export default function App() {
     assistant: language === "ID" ? "Gemini AI Asisten" : "Gemini AI Assistant"
   };
 
+  if (!isLoggedIn) {
+    return (
+      <LoginScreen 
+        onLogin={handleLogin} 
+        language={language} 
+        setLanguage={setLanguage} 
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col font-sans selection:bg-[#0F4C81] selection:text-white">
       
@@ -234,7 +569,9 @@ export default function App() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-extrabold text-[#0F4C81] tracking-tight font-sans">FORSDIG</h1>
-                <span className="bg-[#0F4C81] text-[9px] uppercase tracking-wider text-white px-2.5 py-0.5 rounded font-mono font-bold">{t.ownerLabel}</span>
+                <span className="bg-[#0F4C81] text-[9px] uppercase tracking-wider text-white px-2.5 py-0.5 rounded font-mono font-bold">
+                  {userRole === "Kontraktor" ? (language === "ID" ? "PORTAL REKANAN KONTRAKTOR" : "CONTRACTOR WORKSPACE") : t.ownerLabel}
+                </span>
               </div>
               <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider leading-tight block">{t.tagline} ● PT. Foresyndo Global Indonesia</p>
             </div>
@@ -251,24 +588,22 @@ export default function App() {
               <span>{language === "ID" ? "Bahasa: ID" : "Language: EN"}</span>
             </button>
 
-            {/* Simulated User Selector */}
-            <div className="bg-slate-50 border border-slate-200 py-1 px-2.5 rounded-lg flex items-center gap-2 text-slate-600 font-mono">
-              <UserSquare size={13} className="text-[#0F4C81]" />
-              <span>Role:</span>
-              <select
-                value={userRole}
-                onChange={(e) => setUserRole(e.target.value as ERPUserRole)}
-                className="bg-transparent border-0 text-slate-800 font-bold cursor-pointer text-xs focus:outline-none focus:ring-0"
+            {/* Authenticated User Session Panel */}
+            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 pl-3 pr-2.5 py-1.5 rounded-xl font-mono">
+              <div className="flex flex-col text-right">
+                <span className="text-[11px] font-extrabold text-[#0F4C81] leading-tight block">{loggedUserName}</span>
+                <span className="text-[9px] text-slate-500 font-semibold leading-none uppercase mt-0.5 tracking-wider block">Role: {userRole}</span>
+              </div>
+              
+              <div className="w-px h-6 bg-slate-200"></div>
+
+              <button
+                onClick={handleLogout}
+                title={language === "ID" ? "Keluar Sistem" : "Sign Out Portal"}
+                className="bg-red-50 hover:bg-red-100 hover:text-red-700 text-red-600 transition p-1.5 rounded-lg cursor-pointer flex items-center justify-center border border-red-100 animate-fade-in"
               >
-                <option value="Super Admin" className="bg-white text-slate-800">Super Admin (All)</option>
-                <option value="Direktur" className="bg-white text-slate-800">Direktur (Executive)</option>
-                <option value="Project Director" className="bg-white text-slate-800">Project Director</option>
-                <option value="Project Manager" className="bg-white text-slate-800">Project Manager</option>
-                <option value="Pengawas Lapangan" className="bg-white text-slate-800">Pengawas Lapangan</option>
-                <option value="Kontraktor" className="bg-white text-slate-800">Kontraktor Rec.</option>
-                <option value="Quantity Surveyor" className="bg-white text-slate-800">Quantity Surveyor</option>
-                <option value="Financial Controller" className="bg-white text-slate-800">Financial Controller</option>
-              </select>
+                <LogOut size={13} />
+              </button>
             </div>
           </div>
 
@@ -282,25 +617,41 @@ export default function App() {
         <nav className="lg:col-span-3 bg-white border border-slate-200 rounded-2xl p-5 space-y-5 shadow-sm sticky top-20">
           <span className="text-[10px] text-slate-400 font-mono font-bold uppercase tracking-widest block">Project Operations</span>
           <div className="space-y-1">
+            {/* Contractor Dashboard - Only for Contractor */}
+            {userRole === "Kontraktor" && (
+              <button
+                onClick={() => setActiveTab("contractor_dashboard")}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
+                  activeTab === "contractor_dashboard" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
+                }`}
+              >
+                <LayoutDashboard size={15} /> {language === "ID" ? "Dashboard Kontraktor" : "Contractor Dashboard"}
+              </button>
+            )}
+
             {/* Tab 1 */}
-            <button
-              onClick={() => setActiveTab("dashboard")}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
-                activeTab === "dashboard" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
-              }`}
-            >
-              <LayoutDashboard size={15} /> {t.dashboard}
-            </button>
+            {userRole !== "Kontraktor" && (
+              <button
+                onClick={() => setActiveTab("dashboard")}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
+                  activeTab === "dashboard" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
+                }`}
+              >
+                <LayoutDashboard size={15} /> {t.dashboard}
+              </button>
+            )}
 
             {/* Tab 2 */}
-            <button
-              onClick={() => setActiveTab("master_proyek")}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
-                activeTab === "master_proyek" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
-              }`}
-            >
-              <FolderGit size={15} /> {t.master_proyek}
-            </button>
+            {userRole !== "Kontraktor" && (
+              <button
+                onClick={() => setActiveTab("master_proyek")}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
+                  activeTab === "master_proyek" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
+                }`}
+              >
+                <FolderGit size={15} /> {t.master_proyek}
+              </button>
+            )}
 
             {/* Tab 3 */}
             <button
@@ -313,14 +664,16 @@ export default function App() {
             </button>
 
             {/* Tab 4 */}
-            <button
-              onClick={() => setActiveTab("boq")}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
-                activeTab === "boq" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
-              }`}
-            >
-              <Calculator size={15} /> {t.boq}
-            </button>
+            {userRole !== "Kontraktor" && (
+              <button
+                onClick={() => setActiveTab("boq")}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
+                  activeTab === "boq" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
+                }`}
+              >
+                <Calculator size={15} /> {t.boq}
+              </button>
+            )}
 
             {/* Tab 5 */}
             <button
@@ -343,69 +696,94 @@ export default function App() {
             </button>
 
             {/* Tab 7 */}
-            <button
-              onClick={() => setActiveTab("qc")}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
-                activeTab === "qc" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
-              }`}
-            >
-              <FileCheck size={15} /> {t.qc}
-            </button>
+            {userRole !== "Kontraktor" && (
+              <button
+                onClick={() => setActiveTab("qc")}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
+                  activeTab === "qc" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
+                }`}
+              >
+                <FileCheck size={15} /> {t.qc}
+              </button>
+            )}
 
             {/* Tab 8 */}
-            <button
-              onClick={() => setActiveTab("vo")}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
-                activeTab === "vo" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
-              }`}
-            >
-              <GitCompare size={15} /> {t.vo}
-            </button>
+            {userRole !== "Kontraktor" && (
+              <button
+                onClick={() => setActiveTab("vo")}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
+                  activeTab === "vo" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
+                }`}
+              >
+                <GitCompare size={15} /> {t.vo}
+              </button>
+            )}
 
             {/* Tab 9 */}
-            <button
-              onClick={() => setActiveTab("billing")}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
-                activeTab === "billing" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
-              }`}
-            >
-              <Receipt size={15} /> {t.billing}
-            </button>
+            {userRole !== "Kontraktor" && (
+              <button
+                onClick={() => setActiveTab("billing")}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
+                  activeTab === "billing" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
+                }`}
+              >
+                <Receipt size={15} /> {t.billing}
+              </button>
+            )}
 
             {/* Tab 10 */}
-            <button
-              onClick={() => setActiveTab("materials")}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
-                activeTab === "materials" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
-              }`}
-            >
-              <Box size={15} /> {t.materials}
-            </button>
+            {userRole !== "Kontraktor" && (
+              <button
+                onClick={() => setActiveTab("materials")}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
+                  activeTab === "materials" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
+                }`}
+              >
+                <Box size={15} /> {t.materials}
+              </button>
+            )}
           </div>
 
-          <div className="pt-2 border-t border-slate-100 space-y-2">
-            <span className="text-[10px] text-slate-400 font-mono font-bold uppercase tracking-widest block">AI Co-Pilot</span>
-            <button
-              onClick={() => setActiveTab("assistant")}
-              className={`w-full flex flex-col text-left p-4 rounded-xl cursor-pointer transition-all duration-300 relative overflow-hidden shadow ${
-                activeTab === "assistant" 
-                  ? "bg-[#0F4C81]/10 text-[#0F4C81] border border-blue-200" 
-                  : "bg-[#0F4C81] text-white hover:bg-[#0c3e6b] border border-transparent shadow-lg"
-              }`}
-            >
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-xs">✨</span>
-                <span className="text-xs font-extrabold tracking-wide uppercase">FORSDIG AI ASSISTANT</span>
-              </div>
-              <p className="text-[10px] leading-relaxed opacity-90 italic">
-                "Klik untuk menganalisis anggaran BOQ, progres fisik, dan mitigasi semen."
-              </p>
-            </button>
-          </div>
+          {userRole !== "Kontraktor" && (
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              <span className="text-[10px] text-slate-400 font-mono font-bold uppercase tracking-widest block">AI Co-Pilot</span>
+              <button
+                onClick={() => setActiveTab("assistant")}
+                className={`w-full flex flex-col text-left p-4 rounded-xl cursor-pointer transition-all duration-300 relative overflow-hidden shadow ${
+                  activeTab === "assistant" 
+                    ? "bg-[#0F4C81]/10 text-[#0F4C81] border border-blue-200" 
+                    : "bg-[#0F4C81] text-white hover:bg-[#0c3e6b] border border-transparent shadow-lg"
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-xs">✨</span>
+                  <span className="text-xs font-extrabold tracking-wide uppercase">FORSDIG AI ASSISTANT</span>
+                </div>
+                <p className="text-[10px] leading-relaxed opacity-90 italic">
+                  "Klik untuk menganalisis anggaran BOQ, progres fisik, dan mitigasi semen."
+                </p>
+              </button>
+            </div>
+          )}
         </nav>
 
         {/* Content Viewer (9 cols of desktop grid) */}
         <main className="lg:col-span-9 space-y-6">
+          {activeTab === "contractor_dashboard" && (
+            <ContractorDashboard 
+              loggedUserName={loggedUserName}
+              loggedUserEmail={loggedUserEmail}
+              userRole={userRole}
+              projects={projects}
+              tenders={tenders}
+              bids={bids}
+              progressList={progressList}
+              reports={reports}
+              onNavigate={setActiveTab}
+              language={language}
+            />
+          )}
+
           {activeTab === "dashboard" && (
             <DashboardDirektur 
               projects={projects}
@@ -435,6 +813,7 @@ export default function App() {
               onUpdateTender={handleUpdateTender}
               onUpdateBid={handleUpdateBid}
               userRole={userRole}
+              language={language}
             />
           )}
 
