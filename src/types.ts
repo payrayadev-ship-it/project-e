@@ -49,6 +49,10 @@ export interface TenderBid {
   scoreTotal: number;
   status: "Draft" | "Diajukan" | "Evaluasi" | "Pemenang" | "Gugur";
   createdAt: string;
+  nib?: string;
+  npwp?: string;
+  siujk?: string;
+  sbu?: string;
 }
 
 export type ContractStatus = "Draft" | "Review" | "Approved" | "Active" | "Closed";

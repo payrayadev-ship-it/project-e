@@ -44,6 +44,7 @@ import { InventoryMaterialTracker } from "./components/InventoryMaterialTracker"
 import { GeminiAssistant } from "./components/GeminiAssistant";
 import { LoginScreen } from "./components/LoginScreen";
 import { ContractorDashboard } from "./components/ContractorDashboard";
+import { EmailSimulatorModal } from "./components/EmailSimulatorModal";
 
 // Lucide Icons for sidebar layout
 import { 
@@ -63,7 +64,8 @@ import {
   X, 
   Globe, 
   UserSquare,
-  LogOut
+  LogOut,
+  Mail
 } from "lucide-react";
 
 export default function App() {
@@ -125,6 +127,7 @@ export default function App() {
   });
   const [language, setLanguage] = useState<"ID" | "EN">("ID");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isEmailSimulatorOpen, setIsEmailSimulatorOpen] = useState(false);
 
   // Login handler
   const handleLogin = (role: ERPUserRole, name: string, email: string) => {
@@ -157,7 +160,7 @@ export default function App() {
 
   // Enforce contractor tab restriction recursively
   useEffect(() => {
-    if (isLoggedIn && userRole === "Kontraktor" && !["contractor_dashboard", "progress", "site_report", "tender"].includes(activeTab)) {
+    if (isLoggedIn && userRole === "Kontraktor" && !["contractor_dashboard", "tender"].includes(activeTab)) {
       setActiveTab("contractor_dashboard");
     }
   }, [userRole, activeTab, isLoggedIn]);
@@ -579,6 +582,18 @@ export default function App() {
 
           {/* Interactive Role & Language Swappers */}
           <div className="flex flex-wrap items-center gap-3 text-xs">
+            {/* Email Simulator Hub Trigger */}
+            {userRole !== "Kontraktor" && (
+              <button
+                onClick={() => setIsEmailSimulatorOpen(true)}
+                className="bg-blue-50 hover:bg-blue-100 border border-blue-200 py-1.5 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer font-medium text-blue-700 font-mono transition"
+                title={language === "ID" ? "Buka Simulator Notifikasi Email" : "Open Email Notification Center"}
+              >
+                <Mail size={13} className="text-blue-600 animate-pulse" />
+                <span className="font-bold">{language === "ID" ? "E-Receipt Inbox" : "E-Receipt Inbox"}</span>
+              </button>
+            )}
+
             {/* Language Selector */}
             <button
               onClick={() => setLanguage(language === "ID" ? "EN" : "ID")}
@@ -676,24 +691,28 @@ export default function App() {
             )}
 
             {/* Tab 5 */}
-            <button
-              onClick={() => setActiveTab("progress")}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
-                activeTab === "progress" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
-              }`}
-            >
-              <TrendingUp size={15} /> {t.progress}
-            </button>
+            {userRole !== "Kontraktor" && (
+              <button
+                onClick={() => setActiveTab("progress")}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
+                  activeTab === "progress" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
+                }`}
+              >
+                <TrendingUp size={15} /> {t.progress}
+              </button>
+            )}
 
             {/* Tab 6 */}
-            <button
-              onClick={() => setActiveTab("site_report")}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
-                activeTab === "site_report" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
-              }`}
-            >
-              <CalendarDays size={15} /> {t.site_report}
-            </button>
+            {userRole !== "Kontraktor" && (
+              <button
+                onClick={() => setActiveTab("site_report")}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
+                  activeTab === "site_report" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
+                }`}
+              >
+                <CalendarDays size={15} /> {t.site_report}
+              </button>
+            )}
 
             {/* Tab 7 */}
             {userRole !== "Kontraktor" && (
@@ -814,6 +833,8 @@ export default function App() {
               onUpdateBid={handleUpdateBid}
               userRole={userRole}
               language={language}
+              loggedUserName={loggedUserName}
+              loggedUserEmail={loggedUserEmail}
             />
           )}
 
@@ -900,6 +921,13 @@ export default function App() {
         </main>
 
       </div>
+
+      {/* Corporate Email Simulator Overlay Modal */}
+      <EmailSimulatorModal 
+        isOpen={isEmailSimulatorOpen}
+        onClose={() => setIsEmailSimulatorOpen(false)}
+        loggedUserEmail={loggedUserEmail}
+      />
 
       {/* Micro corporate footer */}
       <footer className="bg-white border-t border-slate-200 py-6 mt-12 text-center text-[11px] text-slate-500 font-mono tracking-wide shrink-0">

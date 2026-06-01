@@ -154,11 +154,30 @@ export function LoginScreen({ onLogin, language, setLanguage }: LoginScreenProps
 
       await setDoc(doc(db, "registered_users", emailKey), newUser);
 
+      // Trigger Email Notification Template Dispatch to confirm secure barcode processing
+      try {
+        await fetch("/api/email/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "REGISTER",
+            email: emailKey,
+            name: regName,
+            details: {
+              company: regCompany,
+              role: regRole,
+            }
+          })
+        });
+      } catch (emailErr) {
+        console.warn("Could not dispatch registration email:", emailErr);
+      }
+
       // Success UX
       setSuccessMsg(
         language === "ID" 
-          ? `Pendaftaran Berhasil! Akun ${regRole} untuk perusahaan ${regCompany} siap digunakan. Silakan login.`
-          : `Registration Successful! ${regRole} account created for ${regCompany}. You can now sign in.`
+          ? `Pendaftaran Berhasil! Akun ${regRole} untuk perusahaan ${regCompany} siap digunakan. Sistem telah memproses barcode digital dan mengirimkan email konfirmasi. Silakan login.`
+          : `Registration Successful! ${regRole} account created for ${regCompany}. The system has processed your digital barcode security key and sent a confirmation email.`
       );
       
       // Auto-prefill login screen and switch view

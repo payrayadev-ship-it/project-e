@@ -87,7 +87,7 @@ export function ContractorDashboard({
       </div>
 
       {/* Primary KPI Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         
         {/* Card 1 */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
@@ -102,38 +102,6 @@ export function ContractorDashboard({
           <div>
             <div className="text-2xl font-black text-slate-900">{myBidsCount} <span className="text-xs font-normal text-slate-500">{language === "ID" ? "Terkirim" : "Submitted"}</span></div>
             <p className="text-[10px] text-slate-500 mt-1">{language === "ID" ? "Jumlah tender aktif diajukan" : "Total active bid submissions"}</p>
-          </div>
-        </div>
-
-        {/* Card 2 */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-[10px] text-slate-400 font-mono font-bold uppercase tracking-widest">
-              {language === "ID" ? "Progres Fisik" : "Physical Progress"}
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
-              <TrendingUp size={16} />
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-black text-slate-900">{myProgressCount} <span className="text-xs font-normal text-slate-500">{language === "ID" ? "Pengajuan" : "Reports"}</span></div>
-            <p className="text-[10px] text-slate-500 mt-1">{language === "ID" ? "Sertifikasi kemajuan progres" : "Progress milestone submissions"}</p>
-          </div>
-        </div>
-
-        {/* Card 3 */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-[10px] text-slate-400 font-mono font-bold uppercase tracking-widest">
-              {language === "ID" ? "Laporan Harian" : "Daily Site Logs"}
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
-              <CalendarDays size={16} />
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-black text-slate-900">{myReportsCount} <span className="text-xs font-normal text-slate-500">{language === "ID" ? "Entri" : "Logs"}</span></div>
-            <p className="text-[10px] text-slate-500 mt-1">{language === "ID" ? "Buku harian pengawasan site" : "Logged daily report history"}</p>
           </div>
         </div>
 
@@ -179,39 +147,15 @@ export function ContractorDashboard({
             {language === "ID" ? "TINDAKAN CEPAT MITRA REKANAN:" : "CONTRACTOR QUICK TRANSACTIONS:"}
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             
-            {/* Tile 1: Physical progress */}
-            <button
-              onClick={() => onNavigate("progress")}
-              className="text-left bg-white hover:bg-slate-50 border border-slate-200 rounded-xl p-5 hover:border-[#0F4C81] transition-all cursor-pointer group shadow-sm flex flex-col justify-between"
-            >
-              <div className="space-y-2">
-                <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-                  📊
-                </div>
-                <h4 className="text-sm font-bold text-slate-900 group-hover:text-[#0F4C81]">
-                  {language === "ID" ? "Posting Progres Fisik" : "Post Physical Progress"}
-                </h4>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  {language === "ID"
-                    ? "Laporkan capaian pembangunan fisik di lapangan (%), unggah foto bukti konkret untuk dicairkan oleh direksi."
-                    : "Declare physical field progress levels, attach site photos, and prepare certified payout documents."}
-                </p>
-              </div>
-              <div className="flex items-center gap-1 text-[#0F4C81] text-xs font-bold pt-4 font-mono">
-                <span>{language === "ID" ? "Menuju Progres" : "Submit Progress"}</span>
-                <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
-              </div>
-            </button>
-
             {/* Tile 2: Tender bid posting */}
             <button
               onClick={() => onNavigate("tender")}
-              className="text-left bg-white hover:bg-slate-50 border border-slate-200 rounded-xl p-5 hover:border-[#0F4C81] transition-all cursor-pointer group shadow-sm flex flex-col justify-between"
+              className="text-left bg-white hover:bg-slate-50 border border-slate-200 rounded-xl p-6 hover:border-[#0F4C81] transition-all cursor-pointer group shadow-sm flex flex-col justify-between"
             >
               <div className="space-y-2">
-                <div className="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
                   🤝
                 </div>
                 <h4 className="text-sm font-bold text-slate-900 group-hover:text-[#0F4C81]">
@@ -226,32 +170,6 @@ export function ContractorDashboard({
               <div className="flex items-center gap-1 text-[#0F4C81] text-xs font-bold pt-4 font-mono">
                 <span>{language === "ID" ? "Buka Pengadaan" : "Browse opportunities"}</span>
                 <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
-              </div>
-            </button>
-
-            {/* Tile 3: Field Daily logbook */}
-            <button
-              onClick={() => onNavigate("site_report")}
-              className="text-left bg-white hover:bg-slate-50 border border-slate-200 rounded-xl p-5 hover:border-[#0F4C81] transition-all cursor-pointer group shadow-sm flex flex-col justify-between md:col-span-2"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1.5">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold mb-1">
-                    📝
-                  </div>
-                  <h4 className="text-sm font-bold text-slate-900 group-hover:text-[#0F4C81]">
-                    {language === "ID" ? "Isi Buku Log Pekerjaan Lapangan" : "Draft Daily Field Inspection Logbook"}
-                  </h4>
-                  <p className="text-xs text-slate-500 leading-relaxed max-w-2xl">
-                    {language === "ID"
-                      ? "Unggah catatan harian cuaca site, jumlah pekerja konstruksi, dan kendala material semen/pasir langsung ke database pusat."
-                      : "Record daily weather conditions, active manpower force, and on-site material constraints directly into the server database."}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 text-[#0F4C81] text-xs font-bold shrink-0 self-end font-mono">
-                  <span>{language === "ID" ? "Mengisi Buku Log" : "Launch Logbook"}</span>
-                  <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
-                </div>
               </div>
             </button>
 

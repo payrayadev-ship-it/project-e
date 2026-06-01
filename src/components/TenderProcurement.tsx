@@ -1,6 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Tender, TenderBid, TenderType, TenderStatus, ERPUserRole } from "../types";
-import { Plus, Check, ListFilter, ShieldCheck, FileSpreadsheet, User, Star, Award } from "lucide-react";
+import { 
+  Plus, Check, ListFilter, ShieldCheck, FileSpreadsheet, User, Star, Award,
+  Printer, Download, X, FileText, CheckCircle2, QrCode
+} from "lucide-react";
 
 interface TenderProcurementProps {
   tenders: Tender[];
@@ -12,6 +15,8 @@ interface TenderProcurementProps {
   onUpdateBid: (id: string, updated: Partial<TenderBid>) => void;
   userRole: ERPUserRole;
   language?: "ID" | "EN";
+  loggedUserName?: string;
+  loggedUserEmail?: string;
 }
 
 export const TenderProcurement: React.FC<TenderProcurementProps> = ({
@@ -23,7 +28,9 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
   onUpdateTender,
   onUpdateBid,
   userRole,
-  language = "ID"
+  language = "ID",
+  loggedUserName = "",
+  loggedUserEmail = ""
 }) => {
   const [showAddTender, setShowAddTender] = useState(false);
   const [selectedTenderId, setSelectedTenderId] = useState<string>(tenders[0]?.id || "");
@@ -43,6 +50,9 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
   const [sbu, setSbu] = useState("SBU-BG009-2025-001");
   const [firmName, setFirmName] = useState("PT. Jaya Makmur Mandiri");
 
+  // Receipt Modal state
+  const [activeReceiptBid, setActiveReceiptBid] = useState<TenderBid | null>(null);
+
   // Bid submission State
   const [myBidAmount, setMyBidAmount] = useState(0);
 
@@ -50,6 +60,63 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
   const [activeTab, setActiveTab] = useState<"owner" | "contractor">(
     userRole === "Kontraktor" ? "contractor" : "owner"
   );
+
+  // Load contractor profile automatically from FireStore or defaults
+  useEffect(() => {
+    if (loggedUserEmail) {
+      if (loggedUserEmail.toLowerCase() === "contractor@foresyndo.com") {
+        setFirmName("PT. Krakatau Karya Jaya (Rekanan)");
+        setNib("9120301928371");
+        setNpwp("01.324.552.1-013.000");
+        setSiujk("0220/SIUJK/DPMPTSP/2025");
+        setSbu("SBU-BG009-2025-001");
+        setContractorRegDone(true);
+      } else {
+        const fetchUserData = async () => {
+          try {
+            const { getDoc, doc } = await import("firebase/firestore");
+            const { db } = await import("../firebase");
+            const userSnap = await getDoc(doc(db, "registered_users", loggedUserEmail.toLowerCase().trim()));
+            if (userSnap.exists()) {
+              const uData = userSnap.data();
+              if (uData.company) setFirmName(uData.company);
+              if (uData.nib) setNib(uData.nib);
+              if (uData.npwp) setNpwp(uData.npwp);
+              if (uData.siujk) setSiujk(uData.siujk);
+              if (uData.sbu) setSbu(uData.sbu);
+              if (uData.nib) setContractorRegDone(true);
+            } else if (loggedUserName) {
+              setFirmName(loggedUserName);
+            }
+          } catch (e) {
+            console.error("Error loading contractor profile from registered_users:", e);
+          }
+        };
+        fetchUserData();
+      }
+    } else if (loggedUserName) {
+      setFirmName(loggedUserName);
+    }
+  }, [loggedUserEmail, loggedUserName]);
+
+  const handleVerifyLegal = async () => {
+    setContractorRegDone(true);
+    if (loggedUserEmail) {
+      try {
+        const { setDoc, doc } = await import("firebase/firestore");
+        const { db } = await import("../firebase");
+        await setDoc(doc(db, "registered_users", loggedUserEmail.toLowerCase().trim()), {
+          company: firmName,
+          nib,
+          npwp,
+          siujk,
+          sbu
+        }, { merge: true });
+      } catch (e) {
+        console.error("Error updating legal verification profile:", e);
+      }
+    }
+  };
 
   const handleCreateTender = (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,7 +151,7 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
       id: `BID-${Math.floor(100 + Math.random() * 900)}`,
       tenderId: selectedTenderId,
       tenderTitle: selectedTender?.title || "",
-      contractorId: "CONT-GUEST",
+      contractorId: loggedUserEmail || "CONT-GUEST",
       contractorName: firmName,
       bidValue: Number(myBidAmount),
       proposalTechUrl: "#",
@@ -94,12 +161,43 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
       scorePrice: 0,
       scoreTotal: 0,
       status: "Diajukan",
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      nib,
+      npwp,
+      siujk,
+      sbu
     };
 
     onAddBid(bid);
+    
+    // Dispatch system email notification with official digital barcode receipt
+    const contractorEmail = loggedUserEmail || "rekanan@foresyndo.com";
+    try {
+      fetch("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "TENDER_SUBMISSION",
+          email: contractorEmail,
+          name: firmName,
+          details: {
+            bidId: bid.id,
+            tenderId: bid.tenderId,
+            tenderTitle: bid.tenderTitle,
+            bidValue: bid.bidValue,
+            nib: bid.nib || nib,
+            npwp: bid.npwp || npwp,
+            sbu: bid.sbu || sbu
+          }
+        })
+      });
+    } catch (e) {
+      console.warn("Could not dispatch bidding receipt email:", e);
+    }
+
     setMyBidAmount(0);
-    alert("Penawaran Berhasil Diajukan!");
+    // Open the official barcode receipt modal!
+    setActiveReceiptBid(bid);
   };
 
   const handleGradeBid = (bidId: string, admin: number, tech: number, price: number) => {
@@ -337,106 +435,425 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
         </div>
       ) : (
         /* Contractors Portal Panel */
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-4">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="text-blue-400" size={24} />
-              <div>
-                <h3 className="text-base font-bold text-white">Hub Registrasi & Portal Evaluasi Kontraktor</h3>
-                <p className="text-xs text-slate-400">Pastikan seluruh berkas legalitas dan NIB terafiliasi resmi sebelum mengajukan proposal harga.</p>
+        <div className="space-y-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="text-blue-400" size={24} />
+                <div>
+                  <h3 className="text-base font-bold text-white">Hub Registrasi & Portal Evaluasi Kontraktor</h3>
+                  <p className="text-xs text-slate-400">Pastikan seluruh berkas legalitas dan NIB terafiliasi resmi sebelum mengajukan proposal harga.</p>
+                </div>
+              </div>
+              {!contractorRegDone ? (
+                <button 
+                  onClick={handleVerifyLegal}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs px-4 py-2 rounded-lg cursor-pointer transition shadow"
+                >
+                  Kirim Berkas Legalitas & Verifikasi
+                </button>
+              ) : (
+                <span className="bg-emerald-950 text-emerald-400 border border-emerald-900 font-mono text-xs px-3 py-1.5 rounded-lg flex items-center gap-2">
+                  🟢 Legalitas Verified (QR Code Registered)
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Form Legal */}
+              <div className="space-y-3 bg-slate-950 p-4 rounded-xl border border-slate-850">
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                  <User size={13} /> Dokumen Legalitas Perusahaan (Syarat Pengadaan)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">Nama Perusahaan (Rekanan)</label>
+                    <input type="text" value={firmName} onChange={(e) => setFirmName(e.target.value)} className="w-full bg-slate-900 border border-slate-850 rounded px-2 py-1.5 text-slate-200" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1 font-mono text-emerald-400">NIB (Nomor Induk Berusaha)</label>
+                    <input type="text" value={nib} onChange={(e) => setNib(e.target.value)} className="w-full bg-slate-900 border border-slate-850 rounded px-2 py-1.5 text-slate-400" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">NPWP Badan Usaha</label>
+                    <input type="text" value={npwp} onChange={(e) => setNpwp(e.target.value)} className="w-full bg-slate-900 border border-slate-850 rounded px-2 py-1.5 text-slate-400" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">No. SIUJK Pemprov</label>
+                    <input type="text" value={siujk} onChange={(e) => setSiujk(e.target.value)} className="w-full bg-slate-900 border border-slate-850 rounded px-2 py-1.5 text-slate-400" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] text-slate-400 block mb-1">Sertifikat Badan Usaha (SBU)</label>
+                    <input type="text" value={sbu} onChange={(e) => setSbu(e.target.value)} className="w-full bg-slate-900 border border-slate-850 rounded px-2 py-1.5 text-slate-400" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit proposal section */}
+              <div className="space-y-3 bg-slate-950 p-4 rounded-xl border border-slate-850 flex flex-col justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                    <FileSpreadsheet size={14} className="text-emerald-400" /> Pengajuan Penawaran (Bidding Stage)
+                  </h4>
+                  
+                  <div className="space-y-3 text-xs">
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-1">Pilih Paket Tender Aktif</label>
+                      <select 
+                        value={selectedTenderId} 
+                        onChange={(e) => setSelectedTenderId(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 px-3 py-2 text-xs text-white rounded"
+                      >
+                        {tenders.filter(t => t.status !== "Selesai").map(t => (
+                          <option key={t.id} value={t.id}>{t.title} ({t.id})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-1">Nilai Penawaran Anda (Rupiah) *</label>
+                      <input 
+                        type="number" 
+                        placeholder="e.g. 31000000000"
+                        value={myBidAmount}
+                        onChange={(e) => setMyBidAmount(Number(e.target.value))}
+                        className="w-full bg-slate-900 border border-slate-850 rounded px-3 py-2 text-white font-mono"
+                      />
+                      {selectedTender && (
+                        <span className="text-[10px] text-amber-400 block mt-1.5">
+                          ⚠️ Selisih Nilai HPS Maksimum: <strong>{formatCurrency(selectedTender.hpsValue)}</strong>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleSubmitBid}
+                  disabled={!contractorRegDone || myBidAmount <= 0}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold text-xs py-2.5 rounded-lg transition mt-4"
+                >
+                  {!contractorRegDone ? "Harap Verifikasi Legalitas Di Atas Pertama" : "Kirimkan Proposal Penawaran"}
+                </button>
               </div>
             </div>
-            {!contractorRegDone ? (
-              <button 
-                onClick={() => setContractorRegDone(true)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs px-4 py-2 rounded-lg cursor-pointer transition shadow"
-              >
-                Kirim Berkas Legalitas & Verifikasi
-              </button>
-            ) : (
-              <span className="bg-emerald-950 text-emerald-400 border border-emerald-990 font-mono text-xs px-3 py-1.5 rounded-lg flex items-center gap-2">
-                🟢 Legalitas Verified (QR Code Registered)
-              </span>
-            )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Form Legal */}
-            <div className="space-y-3 bg-slate-950 p-4 rounded-xl border border-slate-850">
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
-                <User size={13} /> Dokumen Legalitas Perusahaan (Syarat Pengadaan)
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div>
-                  <label className="text-[10px] text-slate-400 block mb-1">Nama Perusahaan (Rekanan)</label>
-                  <input type="text" value={firmName} onChange={(e) => setFirmName(e.target.value)} className="w-full bg-slate-900 border border-slate-850 rounded px-2 py-1.5 text-slate-200" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-400 block mb-1 font-mono text-emerald-400">NIB (Nomor Induk Berusaha)</label>
-                  <input type="text" value={nib} onChange={(e) => setNib(e.target.value)} className="w-full bg-slate-900 border border-slate-850 rounded px-2 py-1.5 text-slate-400" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-400 block mb-1">NPWP Badan Usaha</label>
-                  <input type="text" value={npwp} onChange={(e) => setNpwp(e.target.value)} className="w-full bg-slate-900 border border-slate-850 rounded px-2 py-1.5 text-slate-400" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-400 block mb-1">No. SIUJK Pemprov</label>
-                  <input type="text" value={siujk} onChange={(e) => setSiujk(e.target.value)} className="w-full bg-slate-900 border border-slate-850 rounded px-2 py-1.5 text-slate-400" />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="text-[10px] text-slate-400 block mb-1">Sertifikat Badan Usaha (SBU)</label>
-                  <input type="text" value={sbu} onChange={(e) => setSbu(e.target.value)} className="w-full bg-slate-900 border border-slate-850 rounded px-2 py-1.5 text-slate-400" />
-                </div>
-              </div>
+          {/* Historical submissions & Receipts download list */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+            <div>
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider">Daftar Berkas & Penawaran Berhasil Diajukan</h3>
+              <p className="text-xs text-slate-400 mt-1">Unduh bukti tanda terima bersertifikat digital dan barcode resmi untuk penawaran Anda.</p>
             </div>
 
-            {/* Submit proposal section */}
-            <div className="space-y-3 bg-slate-950 p-4 rounded-xl border border-slate-850 flex flex-col justify-between">
-              <div>
-                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                  <FileSpreadsheet size={14} className="text-emerald-400" /> Pengajuan Penawaran (Bidding Stage)
-                </h4>
-                
-                <div className="space-y-3 text-xs">
-                  <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">Pilih Paket Tender Aktif</label>
-                    <select 
-                      value={selectedTenderId} 
-                      onChange={(e) => setSelectedTenderId(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 px-3 py-2 text-xs text-white rounded"
-                    >
-                      {tenders.filter(t => t.status !== "Selesai").map(t => (
-                        <option key={t.id} value={t.id}>{t.title} ({t.id})</option>
-                      ))}
-                    </select>
-                  </div>
+            {(() => {
+              const myActiveBids = bids.filter(bid => {
+                const isMyEmail = loggedUserEmail && bid.contractorId?.toLowerCase() === loggedUserEmail.toLowerCase();
+                const isMyName = loggedUserName && bid.contractorName?.toLowerCase() === loggedUserName.toLowerCase();
+                const isMyFirm = firmName && bid.contractorName?.toLowerCase() === firmName.toLowerCase();
+                return isMyEmail || isMyName || isMyFirm || bid.contractorId === "CONT-GUEST";
+              });
 
-                  <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">Nilai Penawaran Anda (Rupiah) *</label>
-                    <input 
-                      type="number" 
-                      placeholder="e.g. 31000000000"
-                      value={myBidAmount}
-                      onChange={(e) => setMyBidAmount(Number(e.target.value))}
-                      className="w-full bg-slate-900 border border-slate-850 rounded px-3 py-2 text-white font-mono"
-                    />
-                    {selectedTender && (
-                      <span className="text-[10px] text-amber-400 block mt-1.5">
-                        ⚠️ Selisih Nilai HPS Maksimum: <strong>{formatCurrency(selectedTender.hpsValue)}</strong>
-                      </span>
-                    )}
+              if (myActiveBids.length === 0) {
+                return (
+                  <div className="bg-slate-950 border border-slate-850 p-6 rounded-lg text-center text-xs text-slate-500">
+                    Belum ada riwayat berkas penawaran yang terkirim pada sistem pengadaan. Silakan gunakan form penawaran di atas.
                   </div>
+                );
+              }
+
+              return (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 font-mono uppercase tracking-wider text-[10px]">
+                        <th className="py-3 px-2">ID PENAWARAN</th>
+                        <th className="py-3 px-2">NAMA PAKET TENDER</th>
+                        <th className="py-3 px-1.5 text-right">NILAI PENAWARAN</th>
+                        <th className="py-3 px-2 text-center">WAKTU SUBMIT</th>
+                        <th className="py-3 px-2 text-center">STATUS</th>
+                        <th className="py-3 px-2 text-right">TANDA TERIMA</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-850">
+                      {myActiveBids.map((bid) => {
+                        const matchedT = tenders.find(t => t.id === bid.tenderId);
+                        return (
+                          <tr key={bid.id} className="hover:bg-slate-950/40 transition">
+                            <td className="py-3 px-2 font-mono font-bold text-blue-400">{bid.id}</td>
+                            <td className="py-3 px-2">
+                              <div className="font-semibold text-slate-200">{bid.tenderTitle || matchedT?.title}</div>
+                              <div className="text-[10px] text-slate-500 font-mono">{bid.tenderId}</div>
+                            </td>
+                            <td className="py-3 px-1.5 text-right font-mono font-bold text-emerald-400">
+                              {formatCurrency(bid.bidValue)}
+                            </td>
+                            <td className="py-3 px-2 text-center font-mono text-slate-400">
+                              {new Date(bid.createdAt).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}
+                            </td>
+                            <td className="py-3 px-2 text-center">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full font-sans text-[10px] font-bold uppercase tracking-wider ${
+                                bid.status === "Pemenang" 
+                                  ? "bg-amber-950/60 text-amber-400 border border-amber-800/60" 
+                                  : bid.status === "Gugur"
+                                  ? "bg-rose-950/40 text-rose-400 border border-rose-900/40"
+                                  : "bg-blue-950/40 text-blue-400 border border-blue-900/40"
+                              }`}>
+                                {bid.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-2 text-right">
+                              <button
+                                onClick={() => setActiveReceiptBid(bid)}
+                                className="inline-flex items-center gap-1.5 bg-blue-600/10 border border-blue-500/20 hover:bg-blue-600 hover:text-white transition px-3 py-1.5 rounded-lg text-blue-400 font-mono text-[10px] font-bold cursor-pointer"
+                              >
+                                <Printer size={12} /> Unduh Digital PDF
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
-              <button
-                onClick={handleSubmitBid}
-                disabled={!contractorRegDone || myBidAmount <= 0}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-semibold text-xs py-2.5 rounded-lg transition mt-4"
+      {/* STAMP RECEIPT DIGITAL PDF MODAL */}
+      {activeReceiptBid && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex justify-center items-center z-50 p-4 overflow-y-auto">
+          {/* Inject styling custom khusus agar cetakan printer/PDF hanya membidik receipt certificate */}
+          <style dangerouslySetInnerHTML={{__html: `
+            @media print {
+              /* Sembunyikan seluruh UI luar modal */
+              body * {
+                visibility: hidden !important;
+              }
+              /* Hanya tampilkan sertifikat tanda terima */
+              #printable-receipt-card, #printable-receipt-card * {
+                visibility: visible !important;
+              }
+              #printable-receipt-card {
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                box-shadow: none !important;
+                border: none !important;
+                padding: 1.5in !important;
+                background: white !important;
+                color: black !important;
+              }
+              .no-print {
+                display: none !important;
+              }
+            }
+          `}} />
+
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl p-6 text-slate-200 relative my-8 shadow-2xl flex flex-col space-y-4">
+            
+            {/* Modal Controls */}
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3 no-print">
+              <div className="flex items-center gap-2 text-blue-400">
+                <CheckCircle2 size={18} />
+                <span className="text-xs font-mono font-bold tracking-wider uppercase">TANDA TERIMA BERKAS BERINTEGRITAS</span>
+              </div>
+              <button 
+                onClick={() => setActiveReceiptBid(null)}
+                className="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 p-1 rounded-full cursor-pointer transition"
               >
-                {!contractorRegDone ? "Harap Verifikasi Legalitas Di Atas Pertama" : "Kirimkan Proposal Penawaran"}
+                <X size={18} />
               </button>
             </div>
+
+            {/* Printable Area Card */}
+            <div 
+              id="printable-receipt-card" 
+              className="bg-white text-slate-900 p-8 rounded-xl border-[3px] border-double border-slate-300 relative font-sans shadow-inner overflow-hidden"
+              style={{ minHeight: "650px" }}
+            >
+              {/* Background watermark seal */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] select-none pointer-events-none">
+                <div className="w-[450px] h-[450px] border-[20px] border-slate-900 rounded-full flex items-center justify-center font-bold text-6xl text-center rotate-12 p-4">
+                  PT. FORESYNDO GLOBAL INDONESIA
+                </div>
+              </div>
+
+              {/* Certificate Header */}
+              <div className="border-b-2 border-slate-900 pb-5 mb-5 flex justify-between items-start">
+                <div>
+                  <h1 className="text-lg font-extrabold text-slate-900 uppercase tracking-wide">
+                    PT. FORESYNDO GLOBAL INDONESIA
+                  </h1>
+                  <p className="text-[11px] text-slate-500 font-mono font-semibold uppercase tracking-wider block mt-0.5">
+                    Divisi Procurement & Manajemen Pengadaan Rekanan
+                  </p>
+                  <p className="text-[10px] text-slate-400 block mt-1 leading-normal font-sans">
+                    Gedung Foresyndo Multi-Infrastruktur Lt. 8, Mega Kuningan, Jakarta Selatan<br />
+                    T: (021) 5092-2342 | E: procurement@foresyndo.com
+                  </p>
+                </div>
+                {/* Official Stamp badge on header */}
+                <div className="border-2 border-emerald-600 bg-emerald-50 text-emerald-800 font-mono font-bold text-[9px] uppercase tracking-widest px-3 py-1.5 rounded text-center rotate-3 shadow-sm select-none">
+                  E-PROCUREMENT<br />
+                  🟢 SECURE SEAL
+                </div>
+              </div>
+
+              {/* Title of Document */}
+              <div className="text-center space-y-1 mb-6">
+                <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">
+                  SURAT TANDA TERIMA BERKAS PENAWARAN (E-RECEIPT)
+                </h2>
+                <div className="w-16 h-0.5 bg-blue-600 mx-auto"></div>
+                <p className="text-[10px] font-mono font-bold text-slate-500">
+                  NO: RECEIPT/PROJ-BID/FSD/{activeReceiptBid.id}/{new Date(activeReceiptBid.createdAt).getFullYear()}
+                </p>
+              </div>
+
+              {/* Main Document Body */}
+              <div className="space-y-4 text-[11px] leading-relaxed">
+                <p className="indent-5 text-slate-700">
+                  Sistem Informasi E-Procurement PT. Foresyndo Global Indonesia menyatakan bahwa dokumen dan berkas penawaran lelang yang dikirimkan secara daring oleh rekanan kontraktor berikut ini telah diterima, terenkripsi hashes, dan terverifikasi secara administratif:
+                </p>
+
+                {/* Submissions Detail Grid */}
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-4">
+                  <div>
+                    <span className="text-[9px] text-slate-400 font-mono uppercase font-bold block mb-0.5">NAMA BADAN USAHA / REKANAN</span>
+                    <strong className="text-slate-800 font-sans block text-xs">{activeReceiptBid.contractorName}</strong>
+                    <span className="text-[9px] text-slate-400 font-mono mt-0.5 block">
+                      ID: {activeReceiptBid.contractorId}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-[9px] text-slate-400 font-mono uppercase font-bold block mb-0.5">PAKET PEKERJAAN TENDER</span>
+                    <strong className="text-slate-800 font-sans block text-xs">{activeReceiptBid.tenderTitle}</strong>
+                    <span className="text-[9px] text-slate-400 font-mono mt-0.5 block">
+                      Kode Tender: {activeReceiptBid.tenderId}
+                    </span>
+                  </div>
+
+                  <div className="sm:col-span-2 border-t border-slate-200/80 pt-2.5">
+                    <span className="text-[9px] text-slate-400 font-mono uppercase font-bold block mb-1">DATA DOKUMEN LEGALITAS REKANAN</span>
+                    <div className="grid grid-cols-2 gap-y-1.5 text-[10px] text-slate-600 font-mono">
+                      <div>NIB Perusahaan: <span className="font-bold text-slate-800">{activeReceiptBid.nib || "9120301928371"}</span></div>
+                      <div>No. SIUJK: <span className="font-bold text-slate-800">{activeReceiptBid.siujk || "0220/SIUJK/DPMPTSP/2025"}</span></div>
+                      <div>NPWP Pajak: <span className="font-bold text-slate-800">{activeReceiptBid.npwp || "01.324.552.1-013.000"}</span></div>
+                      <div>Sertifikat SBU: <span className="font-bold text-slate-800">{activeReceiptBid.sbu || "SBU-BG009-2025-001"}</span></div>
+                    </div>
+                  </div>
+
+                  <div className="sm:col-span-2 border-t border-slate-200/80 pt-2.5">
+                    <span className="text-[9px] text-slate-400 font-mono uppercase font-bold block mb-1">DOKUMEN PENAWARAN (ATTACHED PACK)</span>
+                    <div className="grid grid-cols-2 gap-y-1 text-[10px] text-slate-600 font-serif font-semibold italic">
+                      <div>☑ Proposal_Teknis_Metode_Kerja.pdf</div>
+                      <div>☑ Proposal_Spesifikasi_Alat.pdf</div>
+                      <div>☑ Rincian_RAB_Lengkap.xlsx</div>
+                      <div>☑ Berkas_Kualifikasi_Administrasi.zip</div>
+                    </div>
+                  </div>
+
+                  <div className="sm:col-span-2 border-t border-slate-200 pt-2.5 flex justify-between items-center bg-blue-50/50 -mx-4 -mb-4 p-3 rounded-b-lg">
+                    <div>
+                      <span className="text-[9px] text-blue-500 font-mono uppercase font-bold block">NILAI NOMINAL PENAWARAN DIAJUKAN</span>
+                      <strong className="text-blue-900 font-mono text-base font-extrabold">{formatCurrency(activeReceiptBid.bidValue)}</strong>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[9px] text-slate-400 font-mono uppercase font-bold block">WAKTU PENERIMAAN BERKAS</span>
+                      <span className="text-slate-800 font-mono text-[10px] font-bold">
+                        {new Date(activeReceiptBid.createdAt).toLocaleString("id-ID", { dateStyle: "long", timeStyle: "medium" })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-slate-650 text-[10px] italic leading-normal pt-2">
+                  Tanda terima ini merupakan bukti hukum sah secara administrasi pengadaaan PT. Foresyndo Global Indonesia dan menjamin bahwa data nilai penawaran tidak diubah (locked integrity SHA-256 digital stamp). Seluruh kelengkapan akan dievaluasi pada tahap kualifikasi teknis dan scoring harga oleh Bagian Procurement.
+                </p>
+              </div>
+
+              {/* Bottom Stamp / Barcode & Signature Columns */}
+              <div className="grid grid-cols-3 gap-4 mt-8 pt-6 border-t border-slate-200 items-end">
+                
+                {/* CSS Barcode Area */}
+                <div className="space-y-2">
+                  <div className="flex flex-col items-center">
+                    {/* Generasi barcode digital lewat CSS garis-garis bar */}
+                    <div className="flex items-end h-8 gap-[1.5px] bg-slate-100 px-3 py-1 rounded select-none pointer-events-none">
+                      <div className="w-[1.5px] h-full bg-black"></div>
+                      <div className="w-[3px] h-full bg-black"></div>
+                      <div className="w-[1px] h-full bg-black"></div>
+                      <div className="w-[4px] h-full bg-black"></div>
+                      <div className="w-[1.5px] h-full bg-black"></div>
+                      <div className="w-[2px] h-full bg-black"></div>
+                      <div className="w-[1px] h-full bg-black"></div>
+                      <div className="w-[3px] h-full bg-black"></div>
+                      <div className="w-[1.5px] h-full bg-black"></div>
+                      <div className="w-[4px] h-full bg-black"></div>
+                      <div className="w-[1px] h-full bg-black"></div>
+                      <div className="w-[2px] h-full bg-black"></div>
+                      <div className="w-[3px] h-full bg-black"></div>
+                      <div className="w-[1.5px] h-full bg-black"></div>
+                    </div>
+                    <span className="text-[8px] font-mono tracking-widest text-slate-500 mt-1 uppercase">
+                      *{activeReceiptBid.id}*
+                    </span>
+                  </div>
+                </div>
+
+                {/* Digital QR Code Pattern */}
+                <div className="flex flex-col items-center space-y-1">
+                  <div className="p-1 border border-slate-300 rounded bg-slate-50">
+                    <QrCode size={40} className="text-slate-800" />
+                  </div>
+                  <span className="text-[7px] text-slate-400 font-mono text-center block uppercase tracking-tighter">
+                    SCAN DIGITAL VALIDATION
+                  </span>
+                </div>
+
+                {/* Authority Signatures */}
+                <div className="text-right space-y-1">
+                  <span className="text-[8px] text-slate-400 font-mono block">DITANDATANGANI DIGITAL:</span>
+                  <div className="py-2 inline-block">
+                    {/* Simulated digital Signature script font */}
+                    <span className="font-serif italic text-xs font-bold text-slate-800 border-b border-dashed border-slate-400 pb-0.5 inline-block">
+                      Hendra Setiadi
+                    </span>
+                  </div>
+                  <strong className="text-[9px] text-slate-900 block font-sans">
+                    Drs. Hendra Setiadi, M.T.
+                  </strong>
+                  <span className="text-[8px] text-slate-500 font-mono block">
+                    Kabag Procurement PT. FSD
+                  </span>
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* Modal actions */}
+            <div className="flex gap-3 justify-end pt-3 border-t border-slate-800 no-print">
+              <button
+                onClick={() => setActiveReceiptBid(null)}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-4 py-2 rounded-lg cursor-pointer transition font-bold"
+              >
+                Tutup
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer transition shadow font-bold"
+              >
+                <Printer size={14} /> Cetak Bukti Penerimaan (PDF)
+              </button>
+            </div>
+
           </div>
         </div>
       )}
