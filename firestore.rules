@@ -1,0 +1,93 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default Deny Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Auth Helper
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Collection: Users
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Collection: Projects
+    match /projects/{projectId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Collection: Tenders
+    match /tenders/{tenderId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Collection: Tender Bids
+    match /tender_bids/{bidId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Collection: Contracts
+    match /contracts/{contractId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Collection: BOQ
+    match /boq/{boqId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Collection: Work Progress
+    match /work_progress/{progressId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Collection: Daily Reports
+    match /daily_reports/{reportId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Collection: Quality Control
+    match /quality_control/{qcId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Collection: Variation Orders (Change Orders)
+    match /variation_orders/{voId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Collection: Payment Terms
+    match /payment_terms/{termId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Collection: Invoices
+    match /invoices/{invoiceId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Collection: Material Inventory
+    match /inventory/{itemId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+  }
+}

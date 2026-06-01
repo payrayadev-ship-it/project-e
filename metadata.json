@@ -1,0 +1,6 @@
+{
+  "name": "FORSDIG Construction ERP",
+  "description": "Enterprise digital procurement and real-time construction management system for PT. Foresyndo Global Indonesia.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

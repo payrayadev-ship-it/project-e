@@ -1,0 +1,285 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account registration with role details",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Owner UID matching auth.uid" },
+        "name": { "type": "string", "description": "Full name of the user" },
+        "email": { "type": "string", "description": "Verified email address" },
+        "role": { "type": "string", "description": "System role (e.g. Admin, Direktur, Project Manager, Kontraktor)" },
+        "companyName": { "type": "string", "description": "Company affiliation" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of creation" }
+      },
+      "required": ["uid", "name", "email", "role"]
+    },
+    "Project": {
+      "title": "Construction Project",
+      "description": "Master data for a construction project",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Project ID" },
+        "name": { "type": "string", "description": "Project title" },
+        "location": { "type": "string", "description": "Project physical area" },
+        "value": { "type": "number", "description": "Total project budget in IDR" },
+        "landArea": { "type": "number", "description": "Land size in square meters" },
+        "buildingArea": { "type": "number", "description": "Building size in square meters" },
+        "type": { "type": "string", "description": "Project standard type e.g. Residential, High-Rise" },
+        "status": { "type": "string", "enum": ["Perencanaan", "Tender", "Berjalan", "Pemeliharaan", "Selesai"], "description": "Project stage" },
+        "targetDate": { "type": "string", "description": "Target completion date" },
+        "progressPhysical": { "type": "number", "description": "Physical completion stage, 0 to 100" },
+        "progressFinancial": { "type": "number", "description": "Financial disbursement stage, 0 to 100" },
+        "description": { "type": "string", "description": "Proyek explanation or notes" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "value", "status"]
+    },
+    "Tender": {
+      "title": "Procurement Packages",
+      "description": "Procurement tender details created by Owner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "title": { "type": "string" },
+        "hpsValue": { "type": "number" },
+        "tenderType": { "type": "string", "enum": ["Terbuka", "Terbatas", "Langsung"] },
+        "schedule": { "type": "string" },
+        "documentUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pengumuman", "Aanwijzing", "Penawaran", "Evaluasi", "Negosiasi", "Selesai"] },
+        "winnerContractorId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "title", "hpsValue", "status"]
+    },
+    "TenderBid": {
+      "title": "Contractor Bids",
+      "description": "Bids submitted by contractors for tenders",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tenderId": { "type": "string" },
+        "contractorId": { "type": "string" },
+        "contractorName": { "type": "string" },
+        "bidValue": { "type": "number" },
+        "proposalTechUrl": { "type": "string" },
+        "proposalPriceUrl": { "type": "string" },
+        "scoreAdmin": { "type": "number" },
+        "scoreTech": { "type": "number" },
+        "scorePrice": { "type": "number" },
+        "scoreTotal": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "tenderId", "contractorId", "bidValue"]
+    },
+    "Contract": {
+      "title": "Contract Details",
+      "description": "Legal contract issued to contractor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "projectName": { "type": "string" },
+        "contractorName": { "type": "string" },
+        "value": { "type": "number" },
+        "retentionPercent": { "type": "number" },
+        "guaranteeExecution": { "type": "number" },
+        "guaranteeMaintenance": { "type": "number" },
+        "status": { "type": "string", "enum": ["Draft", "Review", "Approved", "Active", "Closed"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "projectId", "value", "status"]
+    },
+    "BOQ": {
+      "title": "RAB BOQ",
+      "description": "Bill of Quantity for pricing comparison",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "itemCode": { "type": "string" },
+        "itemName": { "type": "string" },
+        "category": { "type": "string" },
+        "unit": { "type": "string" },
+        "volume": { "type": "number" },
+        "unitPriceBudget": { "type": "number" },
+        "unitPriceActual": { "type": "number" },
+        "totalBudget": { "type": "number" },
+        "totalActual": { "type": "number" }
+      },
+      "required": ["id", "projectId", "itemName", "volume"]
+    },
+    "WorkProgress": {
+      "title": "Work Progress Reports",
+      "description": "Daily/Weekly/Monthly reported progress",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "contractorId": { "type": "string" },
+        "periodType": { "type": "string", "enum": ["Daily", "Weekly", "Monthly"] },
+        "percentage": { "type": "number" },
+        "description": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected", "Revision"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "percentage", "status"]
+    },
+    "DailyReport": {
+      "title": "Site Daily Logs",
+      "description": "Site reports submitted by construction supervisors",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "reporterName": { "type": "string" },
+        "manpower": { "type": "string" },
+        "equipment": { "type": "string" },
+        "materialsEntered": { "type": "string" },
+        "weather": { "type": "string" },
+        "challenges": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "reporterName", "manpower"]
+    },
+    "QualityControl": {
+      "title": "Quality Inspection Findings",
+      "description": "QC Checklists and issue logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "scope": { "type": "string", "enum": ["Struktur", "Arsitektur", "MEP", "Infrastruktur"] },
+        "issue": { "type": "string" },
+        "status": { "type": "string", "enum": ["Open", "In-Progress", "Rectified", "Closed"] },
+        "inspector": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "rectificationPhotoUrl": { "type": "string" }
+      },
+      "required": ["id", "projectId", "scope", "issue", "status"]
+    },
+    "VariationOrder": {
+      "title": "Change Order (VO)",
+      "description": "Work variation modifications",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "contractorId": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["Tambah", "Kurang", "Perubahan Spesifikasi"] },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["Draft", "Submitted", "Project Manager Approved", "Direktur Approved", "Rejected"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "projectId", "type", "amount", "status"]
+    },
+    "PaymentTerm": {
+      "title": "Payment Terms Stages",
+      "description": "Scheduled payment terms for contract",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "contractId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "phaseName": { "type": "string" },
+        "contractorName": { "type": "string" },
+        "value": { "type": "number" },
+        "status": { "type": "string", "enum": ["Draft", "Verifikasi", "Disetujui", "Dibayar"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "projectId", "contractId", "value", "status"]
+    },
+    "Invoice": {
+      "title": "Payment Request Invoices",
+      "description": "Contractor requests with documents",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "paymentTermId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "invoiceNo": { "type": "string" },
+        "invoiceUrl": { "type": "string" },
+        "fakturPajakUrl": { "type": "string" },
+        "bastUrl": { "type": "string" },
+        "suratJalanUrl": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "paymentTermId", "invoiceNo"]
+    },
+    "Inventory": {
+      "title": "Material Inventory",
+      "description": "Stock and QR movements at site",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "skuCode": { "type": "string" },
+        "qtyStock": { "type": "number" },
+        "unit": { "type": "string" },
+        "warehouseName": { "type": "string" }
+      },
+      "required": ["id", "projectId", "itemName", "qtyStock"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": { "$ref": "User" },
+      "description": "All system registered user accounts"
+    },
+    "projects": {
+      "schema": { "$ref": "Project" },
+      "description": "All monitored construction projects"
+    },
+    "tenders": {
+      "schema": { "$ref": "Tender" },
+      "description": "Packages published for contractor response"
+    },
+    "tender_bids": {
+      "schema": { "$ref": "TenderBid" },
+      "description": "Bids from prospective contractor companies"
+    },
+    "contracts": {
+      "schema": { "$ref": "Contract" },
+      "description": "Execution contracts signed with tenders"
+    },
+    "boq": {
+      "schema": { "$ref": "BOQ" },
+      "description": "Line items for Bill of Quantity"
+    },
+    "work_progress": {
+      "schema": { "$ref": "WorkProgress" },
+      "description": "Interim reports from contractors of execution progress"
+    },
+    "daily_reports": {
+      "schema": { "$ref": "DailyReport" },
+      "description": "Supervisor daily logs of weather and labor"
+    },
+    "quality_control": {
+      "schema": { "$ref": "QualityControl" },
+      "description": "Field inspections and corrections checklist"
+    },
+    "variation_orders": {
+      "schema": { "$ref": "VariationOrder" },
+      "description": "Work changes or specification shifts requested"
+    },
+    "payment_terms": {
+      "schema": { "$ref": "PaymentTerm" },
+      "description": "Payment stages for active execution"
+    },
+    "invoices": {
+      "schema": { "$ref": "Invoice" },
+      "description": "Faktur, BAST, and standard documents uploaded"
+    },
+    "inventory": {
+      "schema": { "$ref": "Inventory" },
+      "description": "Project material status and tracking"
+    }
+  }
+}
