@@ -79,13 +79,34 @@ export function LoginScreen({ onLogin, language, setLanguage }: LoginScreenProps
 
     setLoading(true);
     try {
+      // Fetch system settings to check for newly altered role passwords
+      let systemConfig: any = null;
+      try {
+        const configSnap = await getDoc(doc(db, "system_settings", "config"));
+        if (configSnap.exists()) {
+          systemConfig = configSnap.data();
+        }
+      } catch (configErr) {
+        console.warn("Could not retrieve system settings passwords, falling back to default.", configErr);
+      }
+
       // 1. Check presets first
       const matchedPreset = presets.find(p => p.email.toLowerCase() === loginEmail.toLowerCase());
       if (matchedPreset) {
-        // Simple mock bypass for default seed email
-        onLogin(matchedPreset.role, matchedPreset.name, matchedPreset.email);
-        setLoading(false);
-        return;
+        const allowedPassword = systemConfig?.rolePasswords?.[matchedPreset.role] || "admin123";
+        if (loginPassword === allowedPassword) {
+          onLogin(matchedPreset.role, matchedPreset.name, matchedPreset.email);
+          setLoading(false);
+          return;
+        } else {
+          setError(
+            language === "ID"
+              ? `Kata sandi salah. Role ${matchedPreset.role} saat ini diamankan dengan kunci khusus.`
+              : `Incorrect security key. Role ${matchedPreset.role} is protected with a custom security key.`
+          );
+          setLoading(false);
+          return;
+        }
       }
 
       // 2. Fetch from database collection 'registered_users'
@@ -94,7 +115,8 @@ export function LoginScreen({ onLogin, language, setLanguage }: LoginScreenProps
 
       if (userSnap.exists()) {
         const userData = userSnap.data();
-        if (userData.password === loginPassword) {
+        const roleMasterPassword = systemConfig?.rolePasswords?.[userData.role as ERPUserRole] || "admin123";
+        if (userData.password === loginPassword || roleMasterPassword === loginPassword) {
           onLogin(userData.role as ERPUserRole, userData.name, userData.email);
           setLoading(false);
           return;

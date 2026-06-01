@@ -53,6 +53,10 @@ export interface TenderBid {
   npwp?: string;
   siujk?: string;
   sbu?: string;
+  fileTeknisName?: string;
+  fileAlatName?: string;
+  fileRabName?: string;
+  fileAdminName?: string;
 }
 
 export type ContractStatus = "Draft" | "Review" | "Approved" | "Active" | "Closed";

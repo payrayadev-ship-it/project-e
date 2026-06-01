@@ -45,6 +45,7 @@ import { GeminiAssistant } from "./components/GeminiAssistant";
 import { LoginScreen } from "./components/LoginScreen";
 import { ContractorDashboard } from "./components/ContractorDashboard";
 import { EmailSimulatorModal } from "./components/EmailSimulatorModal";
+import SystemSettings from "./components/SystemSettings";
 
 // Lucide Icons for sidebar layout
 import { 
@@ -65,7 +66,8 @@ import {
   Globe, 
   UserSquare,
   LogOut,
-  Mail
+  Mail,
+  Settings
 } from "lucide-react";
 
 export default function App() {
@@ -120,6 +122,11 @@ export default function App() {
   });
   const [loggedUserEmail, setLoggedUserEmail] = useState<string>(() => {
     return localStorage.getItem("forsdig_user_email") || "admin@foresyndo.com";
+  });
+  const [systemConfig, setSystemConfig] = useState({
+    officeAddress: "Gedung Foresyndo Multi-Infrastruktur Lt. 8, Mega Kuningan, Jakarta Selatan",
+    officeEmail: "procurement@foresyndo.com",
+    officeWhatsapp: "+628119002821"
   });
   const [activeTab, setActiveTab] = useState<string>(() => {
     const role = localStorage.getItem("forsdig_user_role") || "Super Admin";
@@ -347,6 +354,19 @@ export default function App() {
       console.warn("Firestore material_logs snapshot failed:", err.message);
     });
 
+    const unsubConfig = onSnapshot(doc(db, "system_settings", "config"), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setSystemConfig({
+          officeAddress: data.officeAddress || "Gedung Foresyndo Multi-Infrastruktur Lt. 8, Mega Kuningan, Jakarta Selatan",
+          officeEmail: data.officeEmail || "procurement@foresyndo.com",
+          officeWhatsapp: data.officeWhatsapp || "+628119002821"
+        });
+      }
+    }, (err) => {
+      console.warn("Firestore system_settings snapshot failed:", err.message);
+    });
+
     return () => {
       unsubProjects();
       unsubBoq();
@@ -359,6 +379,7 @@ export default function App() {
       unsubPaymentTerms();
       unsubMaterials();
       unsubLogs();
+      unsubConfig();
     };
   }, []);
 
@@ -761,6 +782,18 @@ export default function App() {
                 <Box size={15} /> {t.materials}
               </button>
             )}
+
+            {/* Tab 11: Settings (Super Admin Only) */}
+            {userRole === "Super Admin" && (
+              <button
+                onClick={() => setActiveTab("system_settings")}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold rounded-xl cursor-pointer transition ${
+                  activeTab === "system_settings" ? "bg-slate-50 text-[#0F4C81] border border-slate-100 shadow-sm font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-[#0F4C81]"
+                }`}
+              >
+                <Settings size={15} /> {language === "ID" ? "Pengaturan Sistem" : "System Settings"}
+              </button>
+            )}
           </div>
 
           {userRole !== "Kontraktor" && (
@@ -835,6 +868,9 @@ export default function App() {
               language={language}
               loggedUserName={loggedUserName}
               loggedUserEmail={loggedUserEmail}
+              officeAddress={systemConfig.officeAddress}
+              officeEmail={systemConfig.officeEmail}
+              officeWhatsapp={systemConfig.officeWhatsapp}
             />
           )}
 
@@ -916,6 +952,12 @@ export default function App() {
               materials={materials}
               variationOrders={variationOrders}
               paymentTerms={paymentTerms}
+            />
+          )}
+
+          {activeTab === "system_settings" && userRole === "Super Admin" && (
+            <SystemSettings 
+              language={language}
             />
           )}
         </main>

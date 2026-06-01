@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Tender, TenderBid, TenderType, TenderStatus, ERPUserRole } from "../types";
 import { 
   Plus, Check, ListFilter, ShieldCheck, FileSpreadsheet, User, Star, Award,
-  Printer, Download, X, FileText, CheckCircle2, QrCode
+  Printer, Download, X, FileText, CheckCircle2, QrCode, UploadCloud, Trash2
 } from "lucide-react";
 
 interface TenderProcurementProps {
@@ -17,7 +17,146 @@ interface TenderProcurementProps {
   language?: "ID" | "EN";
   loggedUserName?: string;
   loggedUserEmail?: string;
+  officeAddress?: string;
+  officeEmail?: string;
+  officeWhatsapp?: string;
 }
+
+interface FileUploaderDropzoneProps {
+  label: string;
+  expectedName: string;
+  accept: string;
+  file: { name: string; size: number } | null;
+  onFileChange: (file: { name: string; size: number } | null) => void;
+  language?: "ID" | "EN";
+}
+
+const FileUploaderDropzone: React.FC<FileUploaderDropzoneProps> = ({
+  label,
+  expectedName,
+  accept,
+  file,
+  onFileChange,
+  language = "ID"
+}) => {
+  const [isDragActive, setIsDragActive] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setIsDragActive(true);
+    } else if (e.type === "dragleave") {
+      setIsDragActive(false);
+    }
+  };
+
+  const processFile = (selectedFile: File) => {
+    onFileChange({
+      name: selectedFile.name,
+      size: Math.round(selectedFile.size / 1024) || 2400 // fallback to virtual size in KB
+    });
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    if (e.target.files && e.target.files[0]) {
+      processFile(e.target.files[0]);
+    }
+  };
+
+  const handleZoneClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const clearFile = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onFileChange(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  return (
+    <div 
+      onDragEnter={handleDrag}
+      onDragOver={handleDrag}
+      onDragLeave={handleDrag}
+      onDrop={handleDrop}
+      onClick={handleZoneClick}
+      className={`border rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-all relative overflow-hidden group min-h-[140px] ${
+        file 
+          ? "bg-slate-900/80 border-emerald-500/50 hover:border-emerald-500" 
+          : isDragActive
+          ? "bg-blue-950/40 border-blue-500" 
+          : "bg-slate-950 border-slate-800 hover:border-slate-700"
+      }`}
+    >
+      <input 
+        ref={fileInputRef}
+        type="file" 
+        accept={accept}
+        onChange={handleChange}
+        className="hidden" 
+      />
+
+      {file ? (
+        <div className="space-y-2 w-full flex flex-col items-center">
+          <div className="w-10 h-10 rounded-full bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <CheckCircle2 size={20} className="animate-pulse" />
+          </div>
+          <div className="w-full px-2">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">
+              {label}
+            </p>
+            <p className="text-xs font-semibold text-white truncate max-w-full font-mono mt-1" title={file.name}>
+              {file.name}
+            </p>
+            <p className="text-[9px] text-slate-500 font-mono mt-0.5">
+              {(file.size / 1024).toFixed(2)} MB / SECURED G-HASH
+            </p>
+          </div>
+          <button
+            onClick={clearFile}
+            className="mt-1 text-[10px] bg-slate-850 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-900 rounded px-2.5 py-1 flex items-center gap-1 transition"
+          >
+            <Trash2 size={10} /> Hapus Berkas
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2 flex flex-col items-center w-full">
+          <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 group-hover:bg-slate-850 group-hover:border-slate-700 flex items-center justify-center text-slate-400 group-hover:text-blue-400 transition-all">
+            <UploadCloud size={18} />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-slate-300 group-hover:text-white transition">
+              {label}
+            </p>
+            <p className="text-[10px] text-slate-500 font-mono mt-1">
+              Drag & drop atau klik untuk memilih
+            </p>
+            <p className="text-[9px] bg-slate-900 px-2 py-0.5 rounded text-slate-400 font-mono inline-block border border-slate-850 mt-2">
+              Format: {accept} (Maks 50MB)
+            </p>
+            <div className="text-[8px] text-amber-500/85 font-mono mt-1.5 block">
+              Harus: <span className="underline font-bold text-slate-300">{expectedName}</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const TenderProcurement: React.FC<TenderProcurementProps> = ({
   tenders,
@@ -30,7 +169,10 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
   userRole,
   language = "ID",
   loggedUserName = "",
-  loggedUserEmail = ""
+  loggedUserEmail = "",
+  officeAddress = "Gedung Foresyndo Multi-Infrastruktur Lt. 8, Mega Kuningan, Jakarta Selatan",
+  officeEmail = "procurement@foresyndo.com",
+  officeWhatsapp = "+628119002821"
 }) => {
   const [showAddTender, setShowAddTender] = useState(false);
   const [selectedTenderId, setSelectedTenderId] = useState<string>(tenders[0]?.id || "");
@@ -49,6 +191,12 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
   const [siujk, setSiujk] = useState("0220/SIUJK/DPMPTSP/2025");
   const [sbu, setSbu] = useState("SBU-BG009-2025-001");
   const [firmName, setFirmName] = useState("PT. Jaya Makmur Mandiri");
+  
+  // Uploaded Files State
+  const [fileTeknis, setFileTeknis] = useState<{ name: string; size: number } | null>(null);
+  const [fileAlat, setFileAlat] = useState<{ name: string; size: number } | null>(null);
+  const [fileRab, setFileRab] = useState<{ name: string; size: number } | null>(null);
+  const [fileAdmin, setFileAdmin] = useState<{ name: string; size: number } | null>(null);
 
   // Receipt Modal state
   const [activeReceiptBid, setActiveReceiptBid] = useState<TenderBid | null>(null);
@@ -165,7 +313,11 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
       nib,
       npwp,
       siujk,
-      sbu
+      sbu,
+      fileTeknisName: fileTeknis?.name || "",
+      fileAlatName: fileAlat?.name || "",
+      fileRabName: fileRab?.name || "",
+      fileAdminName: fileAdmin?.name || ""
     };
 
     onAddBid(bid);
@@ -196,6 +348,10 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
     }
 
     setMyBidAmount(0);
+    setFileTeknis(null);
+    setFileAlat(null);
+    setFileRab(null);
+    setFileAdmin(null);
     // Open the official barcode receipt modal!
     setActiveReceiptBid(bid);
   };
@@ -416,10 +572,22 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
                           </div>
 
                           {/* Bid materials documentation */}
-                          <div className="flex gap-4 text-[11px] text-slate-400 font-mono">
-                            <span className="flex items-center gap-1">☑ Proposal Teknis.pdf</span>
-                            <span className="flex items-center gap-1">☑ Proposal RAB.xlsx</span>
-                            <span className="flex items-center gap-1">☑ NIB & SBU Berkas Legal</span>
+                          <div className="bg-slate-900/60 p-3 rounded-lg text-[10px] space-y-2 border border-slate-850 mt-1">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">📄 Dokumen Yang Diunggah:</span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300 font-mono">
+                              <div className="flex items-center gap-1">
+                                <span className="text-emerald-400 font-bold">☑</span> {bid.fileTeknisName || "Proposal_Teknis_Metode_Kerja.pdf"}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-emerald-400 font-bold">☑</span> {bid.fileAlatName || "Proposal_Spesifikasi_Alat.pdf"}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-emerald-400 font-bold">☑</span> {bid.fileRabName || "Rincian_RAB_Lengkap.xlsx"}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-emerald-400 font-bold">☑</span> {bid.fileAdminName || "Berkas_Kualifikasi_Administrasi.zip"}
+                              </div>
+                            </div>
                           </div>
 
                         </div>
@@ -527,13 +695,97 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
 
+            {/* Wide Section: Upload Files */}
+            <div className="bg-slate-950 p-5 rounded-xl border border-slate-850 space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800 pb-3">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-1.5">
+                    📂 Dokumen Kelengkapan Registrasi & Kualifikasi Lelang (Wajib)
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Semua berkas di bawah ini wajib diunggah sesuai format standar demi verifikasi kualifikasi teknis.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFileTeknis({ name: "Proposal_Teknis_Metode_Kerja.pdf", size: 4850 });
+                    setFileAlat({ name: "Proposal_Spesifikasi_Alat.pdf", size: 3120 });
+                    setFileRab({ name: "Rincian_RAB_Lengkap.xlsx", size: 1420 });
+                    setFileAdmin({ name: "Berkas_Kualifikasi_Administrasi.zip", size: 12500 });
+                  }}
+                  className="bg-blue-950 text-blue-400 hover:bg-blue-900 hover:text-white border border-blue-900/50 text-[10px] font-bold py-1.5 px-3 rounded-lg flex items-center gap-1 transition-all"
+                  title="Klik untuk mengisi data dokumen secara instan"
+                >
+                  ⚡ Simulasikan Isian Berkas Cepat
+                </button>
+              </div>
+
+              {/* Grid of 4 Uploaders */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <FileUploaderDropzone 
+                  label="1. Proposal Teknis Metode Kerja" 
+                  expectedName="Proposal_Teknis_Metode_Kerja.pdf" 
+                  accept=".pdf" 
+                  file={fileTeknis}
+                  onFileChange={setFileTeknis}
+                  language={language}
+                />
+                
+                <FileUploaderDropzone 
+                  label="2. Proposal Spesifikasi Alat" 
+                  expectedName="Proposal_Spesifikasi_Alat.pdf" 
+                  accept=".pdf" 
+                  file={fileAlat}
+                  onFileChange={setFileAlat}
+                  language={language}
+                />
+
+                <FileUploaderDropzone 
+                  label="3. Rincian RAB Lengkap" 
+                  expectedName="Rincian_RAB_Lengkap.xlsx" 
+                  accept=".xlsx" 
+                  file={fileRab}
+                  onFileChange={setFileRab}
+                  language={language}
+                />
+
+                <FileUploaderDropzone 
+                  label="4. Berkas Kualifikasi Administrasi" 
+                  expectedName="Berkas_Kualifikasi_Administrasi.zip" 
+                  accept=".zip" 
+                  file={fileAdmin}
+                  onFileChange={setFileAdmin}
+                  language={language}
+                />
+              </div>
+
+              {/* Status and Master Submit bar */}
+              <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-850 gap-4 mt-6">
+                <div className="text-xs text-slate-400 text-center sm:text-left">
+                  {!(fileTeknis && fileAlat && fileRab && fileAdmin) ? (
+                    <span className="text-amber-400 font-semibold block">
+                      ⚠️ Status Dokumen: Silakan unggah seluruh 4 berkas kualifikasi di atas.
+                    </span>
+                  ) : (
+                    <span className="text-emerald-400 font-semibold block">
+                      ✅ Dokumen Lengkap! Berkas siap dikirimkan untuk evaluasi direksi.
+                    </span>
+                  )}
+                  <p className="text-[10px] text-slate-500 mt-0.5">Sistem memindai integritas digital berkas sejalan dengan standar audit ISMS ISO 27001.</p>
+                </div>
+                
                 <button
                   onClick={handleSubmitBid}
-                  disabled={!contractorRegDone || myBidAmount <= 0}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold text-xs py-2.5 rounded-lg transition mt-4"
+                  disabled={!contractorRegDone || myBidAmount <= 0 || !(fileTeknis && fileAlat && fileRab && fileAdmin)}
+                  className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold text-xs py-2.5 px-6 rounded-lg transition"
                 >
-                  {!contractorRegDone ? "Harap Verifikasi Legalitas Di Atas Pertama" : "Kirimkan Proposal Penawaran"}
+                  {!contractorRegDone 
+                    ? "Harap Verifikasi Legalitas Di Atas Pertama" 
+                    : !(fileTeknis && fileAlat && fileRab && fileAdmin)
+                    ? "Unggah Semua Berkas Untuk Mengirim" 
+                    : "Kirimkan Proposal Penawaran"}
                 </button>
               </div>
             </div>
@@ -584,6 +836,22 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
                             <td className="py-3 px-2">
                               <div className="font-semibold text-slate-200">{bid.tenderTitle || matchedT?.title}</div>
                               <div className="text-[10px] text-slate-500 font-mono">{bid.tenderId}</div>
+                              
+                              {/* Attached Files List for each submitted bid */}
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                <span className="bg-slate-950 px-2 py-0.5 rounded text-[9px] text-[#34D399] border border-[#059669]/40 font-mono flex items-center gap-1">
+                                  ☑ {bid.fileTeknisName || "Proposal_Teknis_Metode_Kerja.pdf"}
+                                </span>
+                                <span className="bg-slate-950 px-2 py-0.5 rounded text-[9px] text-[#34D399] border border-[#059669]/40 font-mono flex items-center gap-1">
+                                  ☑ {bid.fileAlatName || "Proposal_Spesifikasi_Alat.pdf"}
+                                </span>
+                                <span className="bg-slate-950 px-2 py-0.5 rounded text-[9px] text-[#34D399] border border-[#059669]/40 font-mono flex items-center gap-1">
+                                  ☑ {bid.fileRabName || "Rincian_RAB_Lengkap.xlsx"}
+                                </span>
+                                <span className="bg-slate-950 px-2 py-0.5 rounded text-[9px] text-[#34D399] border border-[#059669]/40 font-mono flex items-center gap-1">
+                                  ☑ {bid.fileAdminName || "Berkas_Kualifikasi_Administrasi.zip"}
+                                </span>
+                              </div>
                             </td>
                             <td className="py-3 px-1.5 text-right font-mono font-bold text-emerald-400">
                               {formatCurrency(bid.bidValue)}
@@ -624,7 +892,7 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
 
       {/* STAMP RECEIPT DIGITAL PDF MODAL */}
       {activeReceiptBid && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex justify-center items-center z-50 p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex justify-center items-center z-50 p-4 overflow-y-auto print-receipt-modal-overlay">
           {/* Inject styling custom khusus agar cetakan printer/PDF hanya membidik receipt certificate */}
           <style dangerouslySetInnerHTML={{__html: `
             @media print {
@@ -632,21 +900,52 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
               body * {
                 visibility: hidden !important;
               }
-              /* Hanya tampilkan sertifikat tanda terima */
-              #printable-receipt-card, #printable-receipt-card * {
+              /* Tampilkan hanya element modal tanda terima dan seluruh keturunannya */
+              .print-receipt-modal-overlay,
+              .print-receipt-modal-wrapper,
+              #printable-receipt-card, 
+              #printable-receipt-card * {
                 visibility: visible !important;
               }
+              /* Atur posisi container utama modal agar bersih saat di-print */
+              .print-receipt-modal-overlay {
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                background: white !important;
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+              }
+              .print-receipt-modal-wrapper {
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 100% !important;
+                background: white !important;
+                border: none !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+              }
+              /* Sempurnakan tampilan card tanda terima */
               #printable-receipt-card {
                 position: absolute !important;
                 left: 0 !important;
                 top: 0 !important;
                 width: 100% !important;
+                min-width: 100% !important;
                 max-width: 100% !important;
                 box-shadow: none !important;
-                border: none !important;
-                padding: 1.5in !important;
+                border: 3px double #0f172a !important;
+                padding: 30px !important;
                 background: white !important;
-                color: black !important;
+                color: #0f172a !important;
+                margin: 0 !important;
+                border-radius: 0 !important;
               }
               .no-print {
                 display: none !important;
@@ -654,7 +953,7 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
             }
           `}} />
 
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl p-6 text-slate-200 relative my-8 shadow-2xl flex flex-col space-y-4">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl p-6 text-slate-200 relative my-8 shadow-2xl flex flex-col space-y-4 print-receipt-modal-wrapper">
             
             {/* Modal Controls */}
             <div className="flex justify-between items-center border-b border-slate-800 pb-3 no-print">
@@ -693,8 +992,8 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
                     Divisi Procurement & Manajemen Pengadaan Rekanan
                   </p>
                   <p className="text-[10px] text-slate-400 block mt-1 leading-normal font-sans">
-                    Gedung Foresyndo Multi-Infrastruktur Lt. 8, Mega Kuningan, Jakarta Selatan<br />
-                    T: (021) 5092-2342 | E: procurement@foresyndo.com
+                    {officeAddress}<br />
+                    WA: {officeWhatsapp} | E: {officeEmail}
                   </p>
                 </div>
                 {/* Official Stamp badge on header */}
@@ -751,11 +1050,11 @@ export const TenderProcurement: React.FC<TenderProcurementProps> = ({
 
                   <div className="sm:col-span-2 border-t border-slate-200/80 pt-2.5">
                     <span className="text-[9px] text-slate-400 font-mono uppercase font-bold block mb-1">DOKUMEN PENAWARAN (ATTACHED PACK)</span>
-                    <div className="grid grid-cols-2 gap-y-1 text-[10px] text-slate-600 font-serif font-semibold italic">
-                      <div>☑ Proposal_Teknis_Metode_Kerja.pdf</div>
-                      <div>☑ Proposal_Spesifikasi_Alat.pdf</div>
-                      <div>☑ Rincian_RAB_Lengkap.xlsx</div>
-                      <div>☑ Berkas_Kualifikasi_Administrasi.zip</div>
+                    <div className="grid grid-cols-2 gap-y-1 text-[10px] text-slate-600 font-mono">
+                      <div>☑ {activeReceiptBid.fileTeknisName || "Proposal_Teknis_Metode_Kerja.pdf"}</div>
+                      <div>☑ {activeReceiptBid.fileAlatName || "Proposal_Spesifikasi_Alat.pdf"}</div>
+                      <div>☑ {activeReceiptBid.fileRabName || "Rincian_RAB_Lengkap.xlsx"}</div>
+                      <div>☑ {activeReceiptBid.fileAdminName || "Berkas_Kualifikasi_Administrasi.zip"}</div>
                     </div>
                   </div>
 
